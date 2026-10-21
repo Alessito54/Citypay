@@ -1,5 +1,21 @@
 # Welcome to your Expo app 👋
 
+## Environment configuration
+
+Copy `.env.example` to `.env.local` and fill in the Firebase project
+configuration. Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the
+client bundle.
+
+The Neon connection string and Cloudinary API secret are server-only
+credentials. Do not add them to `.env.local`, application code, or an Expo
+build. Store them in the secret manager for the backend that will access
+PostgreSQL or sign Cloudinary uploads. The values previously shared for these
+services should be rotated before use.
+
+The current app still uses demo authentication and in-memory report and
+reconciliation services; adding environment variables does not enable those
+services automatically.
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started

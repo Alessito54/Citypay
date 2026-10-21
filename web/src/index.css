@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-navy-950: #060d1f;
+  --color-navy-900: #0b1731;
+  --color-navy-800: #102044;
+  --color-navy-700: #163058;
+  --color-navy-600: #1e4080;
+  --color-navy-500: #2557a7;
+  --color-navy-400: #3b72cc;
+  --color-navy-300: #6b9fe4;
+  --color-navy-200: #a8c8f5;
+  --color-navy-100: #daeafd;
+  --color-navy-50:  #f0f6ff;
+
+  --color-slate-950: #0a0e1a;
+  --color-slate-900: #111827;
+
+  --color-success-900: #052e16;
+  --color-success-700: #15803d;
+  --color-success-500: #22c55e;
+  --color-success-100: #dcfce7;
+  --color-success-50:  #f0fdf4;
+
+  --color-warning-900: #451a03;
+  --color-warning-700: #b45309;
+  --color-warning-500: #f59e0b;
+  --color-warning-100: #fef3c7;
+  --color-warning-50:  #fffbeb;
+
+  --color-danger-900: #450a0a;
+  --color-danger-700: #b91c1c;
+  --color-danger-500: #ef4444;
+  --color-danger-100: #fee2e2;
+  --color-danger-50:  #fff1f1;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #f1f4f9;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Table row hover */
+.tr-row:hover { background: #f8faff; }
+.tr-row.selected { background: #eef4ff; }
+
+/* Smooth transitions */
+.panel-slide {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid #2557a7;
+  outline-offset: 2px;
+  border-radius: 4px;
+}

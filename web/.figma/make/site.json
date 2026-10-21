@@ -1,0 +1,10 @@
+{
+  "description": "Streamline payment reconciliation for municipal administrators with a user-friendly interface, real-time KPIs, and actionable insights for efficient oversight.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
