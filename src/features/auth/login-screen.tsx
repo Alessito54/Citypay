@@ -150,6 +150,31 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           </Text>
           <Text style={s.sub}>{copy.sub}</Text>
 
+          {mode === 'login' ? (
+            <View style={s.presetRow}>
+              <Pressable
+                onPress={() => {
+                  setEmail('admin@citypay.gob.mx');
+                  setPassword('admin123');
+                }}
+                style={[s.presetPill, email === 'admin@citypay.gob.mx' && s.presetPillActive]}>
+                <Text style={[s.presetText, email === 'admin@citypay.gob.mx' && s.presetTextActive]}>
+                  👑 Admin (Gestión)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setEmail('demo@citypay.gob.mx');
+                  setPassword('demo123');
+                }}
+                style={[s.presetPill, email === 'demo@citypay.gob.mx' && s.presetPillActive]}>
+                <Text style={[s.presetText, email === 'demo@citypay.gob.mx' && s.presetTextActive]}>
+                  👤 Demo Ciudadano
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           <View style={s.form}>
             {mode === 'register' ? (
               <Field label="Nombre completo" icon="user" error={fieldErrors.name}>
@@ -360,4 +385,9 @@ const s = StyleSheet.create({
   soon: { fontFamily: FONT.sans, fontSize: 11.5, color: C.text3 },
   signupRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, marginTop: 14 },
   signup: { fontFamily: FONT.sans, fontSize: 14, color: C.text2 },
+  presetRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 4 },
+  presetPill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: C.blueSoft, borderWidth: 1, borderColor: C.border },
+  presetPillActive: { backgroundColor: C.blue, borderColor: C.blue },
+  presetText: { fontFamily: FONT.sansSemi, fontSize: 11, color: C.blue },
+  presetTextActive: { color: '#fff' },
 });

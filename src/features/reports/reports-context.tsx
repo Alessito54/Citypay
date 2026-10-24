@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { reportsService } from '@/services/reports-service';
-import { DEMO_REPORTS } from '@/services/demo-data';
 import type { NewReportInput, Report } from '@/types';
 
 interface ReportsValue {
@@ -14,7 +13,7 @@ interface ReportsValue {
 const ReportsContext = createContext<ReportsValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
-  const [reports, setReports] = useState<Report[]>(DEMO_REPORTS);
+  const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refreshReports = useCallback(async () => {
@@ -27,7 +26,9 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Mount-time fetch: the provider owns this data, so the request belongs here.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshReports();
   }, [refreshReports]);
 

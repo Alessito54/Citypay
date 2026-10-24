@@ -4,10 +4,11 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
-import { AdminLogo } from '@/components/brand';
+import { AdminLogo, HeaderLogo } from '@/components/brand';
 import { Icon } from '@/components/icon';
 import { cardShadow, EmptyState } from '@/components/ui';
 import { C, FONT, TOUCH } from '@/constants/colors';
+import { useAuth } from '@/features/auth/auth-context';
 import type { Status } from '@/types';
 
 import { fmtMoney, SERVICE_LABEL } from './format';
@@ -24,10 +25,12 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 const isFilter = (v: unknown): v is Filter => FILTERS.some((f) => f.id === v);
 
-/** Transaction list with status filter + free-text search over demo data. */
+/** Transaction list with status filter + free-text search, scoped to the signed-in role. */
 export function PaymentsScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ filtro?: string }>();
+  const { session } = useAuth();
+  const isAdmin = session?.role === 'admin';
   const { transactions, resolvedIds, open } = useReconciliation();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>(isFilter(params.filtro) ? params.filtro : 'todos');
@@ -52,13 +55,13 @@ export function PaymentsScreen() {
       const estado: Status = resolvedIds.has(t.id) ? 'conciliado' : t.estado;
       if (filter !== 'todos' && estado !== filter) return false;
       if (!term) return true;
-      return `${t.folio} ${t.concepto} ${t.ciudadano} ${t.banco} ${t.referenciaBancaria} ${SERVICE_LABEL[t.servicio]}`
+      return `${t.folio} ${t.concepto} ${t.ciudadano} ${t.banco} ${t.referenciaBancaria} ${SERVICE_LABEL[t.servicio] || ''}`
         .toLowerCase()
         .includes(term);
     });
   }, [transactions, resolvedIds, q, filter]);
 
-  const total = list.reduce((a, t) => a + t.montoSistema, 0);
+  const total = list.reduce((a, t) => a + (t.montoSistema || 0), 0);
   const hasFilters = q.trim() !== '' || filter !== 'todos';
   const clearAll = () => {
     setQ('');
@@ -68,7 +71,7 @@ export function PaymentsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={{ paddingTop: insets.top, backgroundColor: C.white }}>
-        <AppHeader logo={<AdminLogo />} dot />
+        <AppHeader logo={isAdmin ? <AdminLogo /> : <HeaderLogo />} dot={isAdmin} />
       </View>
       <FlatList
         data={list}
@@ -80,18 +83,23 @@ export function PaymentsScreen() {
           <View style={{ padding: 18, paddingBottom: 10, gap: 12 }}>
             <View>
               <Text accessibilityRole="header" style={s.h1}>
-                Pagos
+                {isAdmin ? 'Conciliación de Pagos' : 'Mis Pagos Realizados'}
               </Text>
-              <Text style={s.sub}>Toca un pago para ver su detalle o conciliarlo.</Text>
+              <Text style={s.sub}>
+                {isAdmin
+                  ? `Recaudación municipal · ${list.length} registros · ${fmtMoney(total)}`
+                  : `Historial de tu cuenta · ${list.length} recibos · Total: ${fmtMoney(total)}`}
+              </Text>
             </View>
+
             <View style={s.search}>
               <Icon name="search" size={18} color={C.text2} />
               <TextInput
                 value={q}
                 onChangeText={setQ}
                 accessibilityLabel="Buscar pagos"
-                accessibilityHint="Busca por folio, ciudadano, concepto o banco"
-                placeholder="Folio, ciudadano o banco"
+                accessibilityHint={isAdmin ? 'Busca por folio, ciudadano, concepto o banco' : 'Busca por folio o concepto'}
+                placeholder={isAdmin ? 'Folio, ciudadano o banco' : 'Folio o concepto'}
                 placeholderTextColor={C.text3}
                 style={s.searchInput}
                 autoCorrect={false}
@@ -104,6 +112,7 @@ export function PaymentsScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {isAdmin ? (
             <View style={s.chips} accessibilityRole="tablist">
               {FILTERS.map((f) => {
                 const on = filter === f.id;
@@ -124,6 +133,7 @@ export function PaymentsScreen() {
                 );
               })}
             </View>
+            ) : null}
             <View style={s.resultRow}>
               <Text style={s.result} accessibilityLiveRegion="polite">
                 {list.length} {list.length === 1 ? 'pago' : 'pagos'} · {fmtMoney(total)}
@@ -139,15 +149,28 @@ export function PaymentsScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            title="No encontramos pagos"
-            body={q ? `Ningún pago coincide con “${q.trim()}” en este filtro.` : 'No hay pagos con este estado.'}
-            actionLabel="Limpiar búsqueda y filtros"
-            onAction={clearAll}
+            title={isAdmin ? 'No hay transacciones registradas' : 'Aún no tienes pagos registrados'}
+            body={
+              hasFilters
+                ? `Ningún pago coincide con “${q.trim()}” en este filtro.`
+                : isAdmin
+                  ? 'No se encontraron registros de recaudación.'
+                  : 'Cuando realices el pago de predial, agua o multas, tus comprobantes fiscales y folios aparecerán aquí.'
+            }
+            actionLabel={hasFilters ? 'Limpiar búsqueda y filtros' : undefined}
+            onAction={hasFilters ? clearAll : undefined}
           />
         }
-        renderItem={({ item, index }) => (
-          <View style={[s.itemWrap, index === 0 && s.first, index === list.length - 1 && s.last]}>
-            <TransactionRow tx={item} resolved={resolvedIds.has(item.id)} last={index === list.length - 1} onPress={() => open(item)} />
+        renderItem={({ item }) => (
+          <View style={{ paddingHorizontal: 18, paddingVertical: 4 }}>
+            <View style={s.card}>
+              <TransactionRow
+                tx={item}
+                resolved={resolvedIds.has(item.id)}
+                last
+                onPress={() => isAdmin && open(item)}
+              />
+            </View>
           </View>
         )}
       />
@@ -171,9 +194,5 @@ const s = StyleSheet.create({
   result: { fontFamily: FONT.sansSemi, fontSize: 13, color: C.text2 },
   clearAll: { minHeight: TOUCH, justifyContent: 'center' },
   clearAllText: { fontFamily: FONT.sansSemi, fontSize: 14, color: C.blue, textDecorationLine: 'underline' },
-  itemWrap: { backgroundColor: C.white, marginHorizontal: 18, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border, overflow: 'hidden' },
-  first: { borderTopWidth: 1, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
-  last: { borderBottomWidth: 1, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, ...cardShadow },
+  card: { backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.border, overflow: 'hidden', ...cardShadow },
 });
-
-export { STATUS_CFG };
