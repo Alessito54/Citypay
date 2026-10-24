@@ -5,7 +5,7 @@ export type IconName =
   | 'money' | 'card' | 'warn' | 'clock' | 'home' | 'chart' | 'doc' | 'user' | 'chat'
   | 'bell' | 'chevronRight' | 'chevronDown' | 'chevronLeft' | 'search' | 'mail' | 'lock'
   | 'eye' | 'eyeOff' | 'globe' | 'calendar' | 'bulb' | 'pin' | 'locate' | 'x' | 'xCircle'
-  | 'camera' | 'image' | 'send' | 'file' | 'settings' | 'check' | 'logout';
+  | 'camera' | 'image' | 'send' | 'file' | 'settings' | 'check' | 'logout' | 'tool';
 
 const ICONS: Record<IconName, ReactNode> = {
   money: <><Line x1="12" y1="1" x2="12" y2="23" /><Path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
@@ -39,6 +39,7 @@ const ICONS: Record<IconName, ReactNode> = {
   send: <><Line x1="22" y1="2" x2="11" y2="13" /><Polygon points="22 2 15 22 11 13 2 9 22 2" /></>,
   settings: <Circle cx="12" cy="12" r="3" />,
   check: <Polyline points="20 6 9 17 4 12" />,
+  tool: <Path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
   logout: <><Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><Polyline points="16 17 21 12 16 7" /><Line x1="21" y1="12" x2="9" y2="12" /></>,
 };
 

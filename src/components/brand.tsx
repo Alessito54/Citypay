@@ -56,5 +56,5 @@ export function AdminLogo() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   admin1: { fontFamily: FONT.displayXBold, fontSize: 14, color: C.blue, letterSpacing: 0.56, lineHeight: 15 },
-  admin2: { fontFamily: FONT.sansSemi, fontSize: 9, color: C.text3, letterSpacing: 0.54, lineHeight: 10 },
+  admin2: { fontFamily: FONT.sansSemi, fontSize: 10, color: C.text3, letterSpacing: 0.54, lineHeight: 12 },
 });
