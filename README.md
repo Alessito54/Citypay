@@ -43,6 +43,38 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Deploy the backend to Render
+
+[`render.yaml`](render.yaml) is a Blueprint: **New > Blueprint** in the Render
+dashboard, pick this repository, and Render prompts for every secret. It builds
+from the `backend/` subdirectory, so nothing else in the repo matters to it.
+
+```
+Build:  npm ci --include=dev && npm run build
+Start:  npm run start:prod
+Health: /health
+```
+
+`--include=dev` is not optional: `@nestjs/cli` and `typescript` live in
+`devDependencies`, and npm skips those when `NODE_ENV=production`, so the build
+would fail with `nest: not found`.
+
+**Leave `NODE_ENV` unset.** Setting it to `production` disables the dev-token
+shortcut in `FirebaseAuthGuard`, and the **Admin** and **Demo Ciudadano**
+buttons on the login screen depend on it — verified: with `NODE_ENV=production`
+those requests come back `401`. Making them work in production instead means
+creating `admin@citypay.gob.mx` and `demo@citypay.gob.mx` in Firebase
+Authentication with real passwords.
+
+Set `CORS_ORIGINS` to the Netlify domain (comma-separated, no trailing slash) as
+soon as the frontend is live, then put the Render URL into
+`EXPO_PUBLIC_API_URL` in Netlify and redeploy the site so the new value is
+inlined into the bundle.
+
+On the free plan the service sleeps after inactivity, so the first request after
+a pause takes a few seconds — long enough that the app may briefly show the
+connection error before the data arrives.
+
 ## Deploy the web app to Netlify
 
 The web build is a static site. [`netlify.toml`](netlify.toml) already sets the

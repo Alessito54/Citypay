@@ -27,7 +27,8 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Node 20 went end-of-life in April 2026; this matches backend/.node-version.
+  NODE_VERSION = "24"
 
 # Long-lived caching for the content-hashed bundles under _expo/static.
 [[headers]]

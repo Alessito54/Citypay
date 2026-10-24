@@ -1,0 +1,69 @@
+# Render Blueprint for the CityPay NestJS backend.
+#
+# Deploy: Render Dashboard > New > Blueprint > pick this repository. Render reads
+# this file from the repo root and will prompt for every variable marked
+# `sync: false` during the initial Blueprint creation.
+#
+# The frontend is NOT deployed here — it is a static Expo web build on Netlify
+# (see netlify.toml). After this service is live, set EXPO_PUBLIC_API_URL in
+# Netlify to this service's https URL, and add the Netlify domain to
+# CORS_ORIGINS below, or the browser will reject every response.
+
+services:
+  - type: web
+    name: citypay-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+
+    # `--include=dev` matters: @nestjs/cli and typescript live in
+    # devDependencies, and npm skips those when NODE_ENV=production, which would
+    # make `nest build` fail with "nest: not found".
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+
+    # Public endpoint that also pings PostgreSQL, so a failing database shows up
+    # as an unhealthy deploy instead of a service that answers but cannot query.
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+
+      # Left unset on purpose. Setting NODE_ENV=production disables the
+      # dev-token shortcut in FirebaseAuthGuard, which is what the "Admin" and
+      # "Demo Ciudadano" buttons on the login screen rely on; those accounts
+      # would then need to exist in Firebase Authentication with real passwords.
+      # It also switches CORS from permissive to strict, so CORS_ORIGINS has to
+      # be exactly right.
+
+      # Neon connection string, including ?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+
+      # Comma-separated, no trailing slash, e.g.
+      # https://citypay.netlify.app,http://localhost:8081
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Firebase Admin SDK service account
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      # Paste the key including the BEGIN/END lines. Render preserves real
+      # newlines in its dashboard, so paste it as-is rather than with \n escapes.
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+      # Cloudinary, for report photo uploads
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_UPLOAD_PRESET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        sync: false
