@@ -31,15 +31,28 @@ export class ReportsController {
     @Query('priority') priority?: ReportPriority,
     @Query('q') q?: string,
     @Query('mine') mine?: string,
+    @Query('userId') queryUserId?: string,
     @CurrentUser() user?: User,
   ) {
-    const userId = mine === 'true' && user ? user.id : undefined;
+    const isStaff =
+      user &&
+      (user.role === UserRole.ADMIN ||
+        user.role === UserRole.MUNICIPAL_OFFICIAL ||
+        user.role === UserRole.MUNICIPAL_SUPERVISOR);
+
+    // Regular citizens can strictly and exclusively see their own reports from DB
+    const targetUserId = isStaff
+      ? mine === 'true'
+        ? user?.id
+        : queryUserId || undefined
+      : user?.id;
+
     const reports = await this.reportsService.findAll({
       category,
       status,
       priority,
       search: q,
-      userId,
+      userId: targetUserId,
     });
     return reports.map(this.mapToDto);
   }

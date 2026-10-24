@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User, UserRole } from './entities/user.entity';
-import { UpdateProfileDto, UpdateUserRoleDto } from './dto/update-user.dto';
+import { UpdateProfileDto, UpdateUserRoleDto, AdminUpdateUserDto } from './dto/update-user.dto';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -50,6 +51,21 @@ export class UsersController {
     );
   }
 
+  @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.MUNICIPAL_SUPERVISOR)
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.findById(id);
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.ADMIN)
+  updateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdminUpdateUserDto,
+  ) {
+    return this.usersService.updateUser(id, dto);
+  }
+
   @Patch(':id/role')
   @Roles(UserRole.ADMIN)
   updateRole(
@@ -57,5 +73,11 @@ export class UsersController {
     @Body() dto: UpdateUserRoleDto,
   ) {
     return this.usersService.updateRole(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  deleteUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.deleteUser(id);
   }
 }

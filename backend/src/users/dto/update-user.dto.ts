@@ -15,3 +15,17 @@ export class UpdateProfileDto {
   @IsString()
   phone?: string;
 }
+
+export class AdminUpdateUserDto {
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsEnum(UserRole, { message: 'El rol proporcionado no es válido.' })
+  role?: UserRole;
+}

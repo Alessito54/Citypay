@@ -16,16 +16,20 @@ import { DatabaseSeederService } from './database-seeder.service';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        url: config.get<string>('DATABASE_URL'),
-        ssl: { rejectUnauthorized: false },
-        entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory],
-        migrations: [InitialSchema1729000000000],
-        migrationsRun: false, // controlled explicitly in seeder
-        synchronize: false,
-        logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
-      }),
+      useFactory: (config: ConfigService) => {
+        const dbUrl = config.get<string>('DATABASE_URL') || '';
+        const useSsl = dbUrl.includes('sslmode=require') || (!dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1'));
+        return {
+          type: 'postgres',
+          url: dbUrl,
+          ssl: useSsl ? { rejectUnauthorized: false } : false,
+          entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory],
+          migrations: [InitialSchema1729000000000],
+          migrationsRun: false, // controlled explicitly in seeder
+          synchronize: false,
+          logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
+        };
+      },
     }),
     TypeOrmModule.forFeature([
       User,

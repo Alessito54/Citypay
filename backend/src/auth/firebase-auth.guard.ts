@@ -46,6 +46,29 @@ export class FirebaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token de autenticación no proporcionado.');
     }
 
+    // Dev/Seed shortcut tokens for local testing
+    if (process.env.NODE_ENV !== 'production') {
+      if (token === 'dev_admin_token' || token === 'dev-token-admin') {
+        const adminUser = await this.usersService.findByEmail('admin@citypay.gob.mx');
+        if (adminUser) {
+          request.user = adminUser;
+          request.firebaseToken = { uid: adminUser.firebaseUid, email: adminUser.email };
+          return true;
+        }
+      }
+
+      if (token === 'dev_demo_token' || token === 'dev-token-demo' || token === 'dev_citizen_token') {
+        const demoUser =
+          (await this.usersService.findByEmail('demo@citypay.gob.mx')) ||
+          (await this.usersService.findByEmail('ciudadano@citypay.gob.mx'));
+        if (demoUser) {
+          request.user = demoUser;
+          request.firebaseToken = { uid: demoUser.firebaseUid, email: demoUser.email };
+          return true;
+        }
+      }
+    }
+
     const decoded = await this.firebaseService.verifyToken(token);
 
     const email = decoded.email || `${decoded.uid}@citypay.gob.mx`;
