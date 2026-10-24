@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
-  Alert,
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,49 +15,94 @@ import Svg, { Defs, G, LinearGradient, Polygon, Rect, Stop } from 'react-native-
 
 import { Illustration, Wordmark } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icon';
-import { notAvailable } from '@/components/not-available';
-import { C, FONT } from '@/constants/colors';
-import { authService } from '@/services/auth-service';
+import { FieldMessage, PrimaryButton } from '@/components/ui';
+import { C, FONT, TOUCH } from '@/constants/colors';
 
 import { useAuth } from './auth-context';
+
+type Mode = 'login' | 'register' | 'forgot';
+type FieldErrors = { name?: string; email?: string; password?: string };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const COPY: Record<Mode, { title: string; sub: string; cta: string }> = {
+  login: { title: '¡Bienvenido!', sub: 'Inicia sesión para continuar', cta: 'Iniciar sesión' },
+  register: { title: 'Crear cuenta', sub: 'Regístrate para realizar trámites y reportes', cta: 'Crear mi cuenta' },
+  forgot: { title: 'Recuperar acceso', sub: 'Escribe tu correo y te enviaremos instrucciones', cta: 'Enviar instrucciones' },
+};
 
 export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   const insets = useSafeAreaInsets();
   const { signIn, signUp, sendPasswordReset } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInput>(null);
 
-  const submit = async () => {
-    setBusy(true);
+  const switchMode = (m: Mode) => {
     setError(null);
     setInfo(null);
+    setFieldErrors({});
+    setMode(m);
+    AccessibilityInfo.announceForAccessibility(COPY[m].title);
+  };
+
+  /** Client-side checks so the user learns what is wrong next to the field, before any network call. */
+  const validate = (): FieldErrors => {
+    const e: FieldErrors = {};
+    if (mode === 'register' && name.trim().length < 3) e.name = 'Escribe tu nombre completo.';
+    if (!email.trim()) e.email = 'Escribe tu correo electrónico.';
+    else if (!EMAIL_RE.test(email.trim())) e.email = 'Revisa el formato del correo (ejemplo: nombre@correo.com).';
+    if (mode !== 'forgot') {
+      if (!password) e.password = 'Escribe tu contraseña.';
+      else if (mode === 'register' && password.length < 6) e.password = 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    return e;
+  };
+
+  const submit = async () => {
+    setError(null);
+    setInfo(null);
+    const e = validate();
+    setFieldErrors(e);
+    if (e.name || e.email || e.password) {
+      const first = e.name ?? e.email ?? e.password;
+      if (first) AccessibilityInfo.announceForAccessibility(first);
+      if (e.email) emailRef.current?.focus();
+      else if (e.password) passRef.current?.focus();
+      return;
+    }
+    setBusy(true);
     try {
       if (mode === 'login') {
-        await signIn(email, password);
+        await signIn(email.trim(), password);
         onSuccess();
       } else if (mode === 'register') {
-        await signUp(email, password, name);
+        await signUp(email.trim(), password, name.trim());
         onSuccess();
-      } else if (mode === 'forgot') {
-        await sendPasswordReset(email);
-        setInfo('Se ha enviado un correo con instrucciones para restablecer tu contraseña.');
+      } else {
+        await sendPasswordReset(email.trim());
+        setInfo('Listo. Revisa tu correo (también la carpeta de spam) para restablecer tu contraseña.');
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo completar la operación.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo completar la operación. Inténtalo de nuevo.');
     } finally {
       setBusy(false);
     }
   };
 
+  const copy = COPY[mode];
+
   return (
     <View style={s.root}>
-      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none">
+      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" pointerEvents="none">
         <Defs>
           <LinearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor="#FFFFFF" />
@@ -67,11 +112,6 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
         <Rect width="100%" height="100%" fill="url(#bg)" />
       </Svg>
       <View style={s.blob} pointerEvents="none" />
-      <Pressable accessibilityRole="button" onPress={() => notAvailable('Idioma')} style={[s.lang, { top: insets.top + 12 }]}>
-        <Icon name="globe" size={12} color={C.navy} />
-        <Text style={s.langText}>ES</Text>
-        <Icon name="chevronDown" size={9} color={C.navy} />
-      </Pressable>
 
       <Svg viewBox="0 0 390 150" preserveAspectRatio="xMidYMax slice" style={s.skyline} pointerEvents="none">
         <G fill={C.blueIcon} opacity={0.9}>
@@ -94,168 +134,139 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[s.content, { paddingTop: insets.top + 34, paddingBottom: 150 + insets.bottom }]}>
-          <Illustration />
-          <View style={{ marginTop: 2 }}>
-            <Wordmark fontSize={44} />
+          contentContainerStyle={[s.content, { paddingTop: insets.top + 28, paddingBottom: 150 + insets.bottom }]}>
+          <View accessible accessibilityLabel="CityPay. Tu municipio, en un solo lugar." style={{ alignItems: 'center' }}>
+            <Illustration />
+            <View style={{ marginTop: 2 }}>
+              <Wordmark fontSize={44} />
+            </View>
+            <Text style={s.tagline}>
+              TU MUNICIPIO, <Text style={{ color: C.blueMid }}>EN UN SOLO LUGAR.</Text>
+            </Text>
           </View>
-          <Text style={s.tagline}>
-            TU MUNICIPIO, <Text style={{ color: C.blueMid }}>EN UN SOLO LUGAR.</Text>
-          </Text>
 
-          <Text style={s.h1}>
-            {mode === 'login' ? '¡Bienvenido!' : mode === 'register' ? 'Crear cuenta' : 'Recuperar acceso'}
+          <Text accessibilityRole="header" style={s.h1}>
+            {copy.title}
           </Text>
-          <Text style={s.sub}>
-            {mode === 'login'
-              ? 'Inicia sesión para continuar'
-              : mode === 'register'
-              ? 'Regístrate para realizar trámites y reportes'
-              : 'Ingresa tu correo para recibir las instrucciones'}
-          </Text>
+          <Text style={s.sub}>{copy.sub}</Text>
 
           <View style={s.form}>
             {mode === 'register' ? (
-              <Field icon="user">
+              <Field label="Nombre completo" icon="user" error={fieldErrors.name}>
                 <TextInput
                   value={name}
-                  onChangeText={setName}
-                  placeholder="Nombre completo"
+                  onChangeText={(t) => {
+                    setName(t);
+                    if (fieldErrors.name) setFieldErrors((f) => ({ ...f, name: undefined }));
+                  }}
+                  accessibilityLabel="Nombre completo"
+                  placeholder="Ej. María López"
                   placeholderTextColor={C.text3}
                   autoCapitalize="words"
+                  autoComplete="name"
+                  textContentType="name"
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
                   style={s.input}
                 />
               </Field>
             ) : null}
 
-            <Field icon="mail">
+            <Field label="Correo electrónico" icon="mail" error={fieldErrors.email}>
               <TextInput
+                ref={emailRef}
                 value={email}
-                onChangeText={setEmail}
-                placeholder="Correo electrónico"
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (fieldErrors.email) setFieldErrors((f) => ({ ...f, email: undefined }));
+                }}
+                accessibilityLabel="Correo electrónico"
+                placeholder="nombre@correo.com"
                 placeholderTextColor={C.text3}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
                 autoComplete="email"
                 textContentType="emailAddress"
+                returnKeyType={mode === 'forgot' ? 'send' : 'next'}
+                onSubmitEditing={() => (mode === 'forgot' ? submit() : passRef.current?.focus())}
                 style={s.input}
               />
             </Field>
 
             {mode !== 'forgot' ? (
-              <Field icon="lock">
+              <Field label="Contraseña" icon="lock" error={fieldErrors.password}>
                 <TextInput
+                  ref={passRef}
                   value={password}
-                  onChangeText={setPassword}
-                  placeholder="Contraseña"
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    if (fieldErrors.password) setFieldErrors((f) => ({ ...f, password: undefined }));
+                  }}
+                  accessibilityLabel="Contraseña"
+                  accessibilityHint={mode === 'register' ? 'Mínimo 6 caracteres' : undefined}
+                  placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : 'Tu contraseña'}
                   placeholderTextColor={C.text3}
                   secureTextEntry={!show}
                   autoCapitalize="none"
-                  autoComplete="current-password"
-                  textContentType="password"
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                  textContentType={mode === 'register' ? 'newPassword' : 'password'}
+                  returnKeyType="go"
                   onSubmitEditing={submit}
                   style={s.input}
                 />
                 <Pressable
+                  accessibilityRole="button"
                   accessibilityLabel={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                   onPress={() => setShow((v) => !v)}
-                  hitSlop={8}>
-                  <Icon name={show ? 'eyeOff' : 'eye'} size={18} color={C.text3} />
+                  style={s.eye}>
+                  <Icon name={show ? 'eyeOff' : 'eye'} size={20} color={C.text2} />
                 </Pressable>
               </Field>
             ) : null}
 
             {mode === 'login' ? (
-              <Pressable
-                onPress={() => {
-                  setError(null);
-                  setInfo(null);
-                  setMode('forgot');
-                }}
-                style={{ alignSelf: 'flex-end', marginTop: -4 }}>
-                <Text style={s.forgot}>¿Olvidaste tu contraseña?</Text>
-              </Pressable>
+              <TextLink label="¿Olvidaste tu contraseña?" onPress={() => switchMode('forgot')} align="flex-end" />
             ) : null}
 
-            {error ? <Text style={s.error}>{error}</Text> : null}
-            {info ? <Text style={s.infoText}>{info}</Text> : null}
+            <FieldMessage text={error} tone="error" />
+            <FieldMessage text={info} tone="success" />
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
+            <PrimaryButton
+              label={busy ? 'Procesando…' : copy.cta}
+              accessibilityLabel={copy.cta}
+              loading={busy}
               onPress={submit}
-              style={({ pressed }) => [s.submit, pressed && { opacity: 0.85 }]}>
-              <Text style={s.submitText}>
-                {busy
-                  ? 'PROCESANDO…'
-                  : mode === 'login'
-                  ? 'INGRESAR'
-                  : mode === 'register'
-                  ? 'REGISTRARME'
-                  : 'ENVIAR CORREO'}
-              </Text>
-            </Pressable>
+            />
 
             {mode === 'forgot' ? (
-              <Pressable
-                onPress={() => {
-                  setError(null);
-                  setInfo(null);
-                  setMode('login');
-                }}
-                style={{ alignSelf: 'center', marginTop: 4 }}>
-                <Text style={s.forgot}>Volver a inicio de sesión</Text>
-              </Pressable>
+              <TextLink label="Volver a iniciar sesión" onPress={() => switchMode('login')} align="center" />
             ) : null}
           </View>
 
           {mode === 'login' ? (
             <>
-              <View style={s.orRow}>
+              <View style={s.orRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
                 <View style={s.line} />
                 <Text style={s.orText}>o continúa con</Text>
                 <View style={s.line} />
               </View>
               <View style={s.socials}>
-                <Pressable accessibilityRole="button" onPress={() => notAvailable('Google')} style={s.social}>
-                  <Text style={{ fontFamily: FONT.displayXBold, fontSize: 16, color: C.blueMid }}>G</Text>
-                  <Text style={s.socialText}>Google</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={() => notAvailable('Apple')} style={s.social}>
-                  <Text style={{ fontSize: 16, color: C.text1 }}></Text>
-                  <Text style={s.socialText}>Apple</Text>
-                </Pressable>
+                <SocialButton label="Google" />
+                <SocialButton label="Apple" />
               </View>
             </>
           ) : null}
 
-          {mode === 'login' ? (
-            <Text style={s.signup}>
-              ¿No tienes cuenta?{' '}
-              <Text
-                onPress={() => {
-                  setError(null);
-                  setInfo(null);
-                  setMode('register');
-                }}
-                style={{ fontFamily: FONT.sansBold, color: C.blueMid }}>
-                Crea una aquí
-              </Text>
-            </Text>
-          ) : mode === 'register' ? (
-            <Text style={s.signup}>
-              ¿Ya tienes cuenta?{' '}
-              <Text
-                onPress={() => {
-                  setError(null);
-                  setInfo(null);
-                  setMode('login');
-                }}
-                style={{ fontFamily: FONT.sansBold, color: C.blueMid }}>
-                Inicia sesión aquí
-              </Text>
-            </Text>
+          {mode !== 'forgot' ? (
+            <View style={s.signupRow}>
+              <Text style={s.signup}>{mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}</Text>
+              <TextLink
+                label={mode === 'login' ? 'Crear una cuenta' : 'Iniciar sesión'}
+                bold
+                onPress={() => switchMode(mode === 'login' ? 'register' : 'login')}
+              />
+            </View>
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -263,11 +274,63 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function Field({ icon, children }: { icon: IconName; children: React.ReactNode }) {
+function Field({
+  label,
+  icon,
+  error,
+  children,
+}: {
+  label: string;
+  icon: IconName;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={s.field}>
-      <Icon name={icon} size={18} color={C.blueMid} />
-      {children}
+    <View style={{ gap: 6 }}>
+      <Text style={s.label} importantForAccessibility="no" accessibilityElementsHidden>
+        {label}
+      </Text>
+      <View style={[s.field, error ? s.fieldErr : null]}>
+        <Icon name={icon} size={18} color={error ? C.danger : C.blueMid} />
+        {children}
+      </View>
+      <FieldMessage text={error} />
+    </View>
+  );
+}
+
+function TextLink({
+  label,
+  onPress,
+  align,
+  bold,
+}: {
+  label: string;
+  onPress: () => void;
+  align?: 'flex-end' | 'center';
+  bold?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={onPress}
+      hitSlop={6}
+      style={[s.link, align ? { alignSelf: align } : null]}>
+      <Text style={[s.linkText, bold && { fontFamily: FONT.sansBold }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** Social sign-in is not connected yet: shown as "Próximamente" instead of a button that fails. */
+function SocialButton({ label }: { label: string }) {
+  return (
+    <View
+      style={s.social}
+      accessible
+      accessibilityLabel={`Continuar con ${label}, próximamente`}
+      accessibilityState={{ disabled: true }}>
+      <Text style={s.socialText}>{label}</Text>
+      <Text style={s.soon}>Próximamente</Text>
     </View>
   );
 }
@@ -275,27 +338,26 @@ function Field({ icon, children }: { icon: IconName; children: React.ReactNode }
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#fff', overflow: 'hidden' },
   blob: { position: 'absolute', top: -70, left: -60, width: 190, height: 190, borderRadius: 95, backgroundColor: C.blueIcon, opacity: 0.55 },
-  lang: { position: 'absolute', right: 16, zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  langText: { fontFamily: FONT.sansSemi, fontSize: 10.5, color: C.navy },
   skyline: { position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: 150 },
-  content: { paddingHorizontal: 26, alignItems: 'center', flexGrow: 1 },
-  tagline: { fontFamily: FONT.sansBold, fontSize: 9.5, letterSpacing: 0.95, color: C.navy, marginTop: 6 },
-  h1: { fontFamily: FONT.displayXBold, fontSize: 20, color: C.navy, marginTop: 18 },
-  sub: { fontFamily: FONT.sans, fontSize: 12, color: C.text2, marginTop: 2, textAlign: 'center' },
-  form: { width: '100%', gap: 12, marginTop: 16 },
-  field: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 46, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border },
-  input: { flex: 1, minWidth: 0, fontFamily: FONT.sans, fontSize: 13, color: C.text1, paddingVertical: 0 },
-  forgot: { fontFamily: FONT.sansSemi, fontSize: 11, color: C.blueMid },
-  error: { fontFamily: FONT.sansSemi, fontSize: 12, color: C.danger },
-  infoText: { fontFamily: FONT.sansSemi, fontSize: 12, color: C.blue, textAlign: 'center' },
-  submit: { height: 46, borderRadius: 10, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', shadowColor: C.blue, shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
-  submitText: { fontFamily: FONT.sansBold, fontSize: 13, letterSpacing: 1.3, color: '#fff' },
-  demo: { fontFamily: FONT.sans, fontSize: 10.5, color: C.text2, textAlign: 'center' },
-  orRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
+  content: { paddingHorizontal: 24, alignItems: 'center', flexGrow: 1 },
+  tagline: { fontFamily: FONT.sansBold, fontSize: 11.5, letterSpacing: 0.9, color: C.navy, marginTop: 6 },
+  h1: { fontFamily: FONT.displayXBold, fontSize: 24, color: C.navy, marginTop: 20 },
+  sub: { fontFamily: FONT.sans, fontSize: 14.5, color: C.text2, marginTop: 4, textAlign: 'center', lineHeight: 20 },
+  form: { width: '100%', gap: 14, marginTop: 18 },
+  label: { fontFamily: FONT.sansSemi, fontSize: 13.5, color: C.text1 },
+  field: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, minHeight: 50, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder },
+  fieldErr: { borderColor: C.danger, borderWidth: 1.5, backgroundColor: C.dangerSoft },
+  input: { flex: 1, minWidth: 0, minHeight: 48, fontFamily: FONT.sans, fontSize: 16, color: C.text1, paddingVertical: 0, paddingRight: 14 },
+  eye: { width: TOUCH + 4, height: 48, alignItems: 'center', justifyContent: 'center' },
+  link: { minHeight: TOUCH, justifyContent: 'center' },
+  linkText: { fontFamily: FONT.sansSemi, fontSize: 14, color: C.blue, textDecorationLine: 'underline' },
+  orRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
   line: { flex: 1, height: 1, backgroundColor: C.border },
-  orText: { fontFamily: FONT.sans, fontSize: 10.5, color: C.text3 },
+  orText: { fontFamily: FONT.sans, fontSize: 13, color: C.text2 },
   socials: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 12 },
-  social: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border },
-  socialText: { fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.text1 },
-  signup: { fontFamily: FONT.sans, fontSize: 11, color: C.text2, marginTop: 16 },
+  social: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 12, backgroundColor: C.screen, borderWidth: 1, borderColor: C.border, borderStyle: 'dashed' },
+  socialText: { fontFamily: FONT.sansSemi, fontSize: 14, color: C.text2 },
+  soon: { fontFamily: FONT.sans, fontSize: 11.5, color: C.text3 },
+  signupRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, marginTop: 14 },
+  signup: { fontFamily: FONT.sans, fontSize: 14, color: C.text2 },
 });

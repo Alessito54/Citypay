@@ -87,6 +87,8 @@ export const reportsService = {
           address: input.direccion,
           description: input.descripcion,
           images: uploadedUrls,
+          latitude: input.latitude,
+          longitude: input.longitude,
         }),
       });
 
@@ -105,6 +107,8 @@ export const reportsService = {
         prioridad: input.prioridad === 'Bajo' ? 'Baja' : (input.prioridad as any),
         icon: ICONS[input.categoria] ?? '📋',
         localOnly: true,
+        latitude: input.latitude,
+        longitude: input.longitude,
       };
     }
   },

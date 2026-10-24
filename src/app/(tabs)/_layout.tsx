@@ -1,8 +1,6 @@
 import type React from 'react';
 import { Redirect, Tabs } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/icon';
@@ -10,6 +8,8 @@ import { cardShadow } from '@/components/ui';
 import { C, FONT } from '@/constants/colors';
 import { useAuth } from '@/features/auth/auth-context';
 import { TransactionReviewHost } from '@/features/reconciliation/transaction-review';
+
+type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: 'Inicio', icon: 'home' },
@@ -31,6 +31,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
           <Pressable
             key={route.key}
             accessibilityRole="tab"
+            accessibilityLabel={`${cfg.label}, pestaña ${i + 1} de ${state.routes.length}`}
             accessibilityState={{ selected: active }}
             onPress={() => {
               const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -64,8 +65,8 @@ export default function TabsLayout() {
 }
 
 const s = StyleSheet.create({
-  bar: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: C.border, paddingTop: 10, ...cardShadow },
-  item: { alignItems: 'center', gap: 3, paddingHorizontal: 8, minWidth: 64 },
-  label: { fontSize: 10 },
+  bar: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: C.border, paddingTop: 6, ...cardShadow },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 4, minHeight: 52 },
+  label: { fontSize: 12 },
   dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.blue },
 });

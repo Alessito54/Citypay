@@ -1,3 +1,4 @@
+import { AccessibilityInfo } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { DEMO_TRANSACTIONS } from '@/services/demo-data';
@@ -64,9 +65,12 @@ export function ReconciliationProvider({ children }: { children: ReactNode }) {
           t.id === selected.id ? { ...t, estado: 'conciliado', montoBanco: t.montoSistema } : t,
         ),
       );
-      close();
+      // Return to the detail sheet so the user sees the "conciliado" confirmation
+      // instead of the sheet silently disappearing.
+      setPhase('detail');
+      AccessibilityInfo.announceForAccessibility('Pago conciliado manualmente.');
     },
-    [selected, close],
+    [selected],
   );
 
   const value = useMemo(
