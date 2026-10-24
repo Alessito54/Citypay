@@ -12,9 +12,11 @@ build. Store them in the secret manager for the backend that will access
 PostgreSQL or sign Cloudinary uploads. The values previously shared for these
 services should be rotated before use.
 
-The current app still uses demo authentication and in-memory report and
-reconciliation services; adding environment variables does not enable those
-services automatically.
+The app reads its data from the NestJS backend in `backend/`, which persists to
+PostgreSQL (Neon). `EXPO_PUBLIC_API_URL` has to point at a running instance of
+that backend, or every screen fails with "No se pudo conectar con el servidor
+municipal". There is no demo-data fallback any more: a freshly registered
+account starts empty, by design.
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
@@ -40,6 +42,38 @@ In the output, you'll find options to open the app in a
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+
+## Deploy the web app to Netlify
+
+The web build is a static site. [`netlify.toml`](netlify.toml) already sets the
+build command (`npx expo export --platform web`) and publish directory (`dist`),
+so connecting the repository in Netlify is enough — no `_redirects` file is
+needed, because `web.output` is `"static"` and every route gets its own HTML
+file.
+
+Before the first build, set the `EXPO_PUBLIC_*` variables under **Site
+configuration > Environment variables**. Expo inlines them into the client
+bundle *at build time*, so a variable added afterwards needs a redeploy to take
+effect. `netlify.toml` lists the full set.
+
+Two things this does not cover:
+
+- **The backend is not deployed by this.** Netlify serves static files and
+  serverless functions; the NestJS app in `backend/` needs its own host (Render,
+  Railway, Fly.io…). Point `EXPO_PUBLIC_API_URL` at that deployment.
+- **It must be HTTPS.** A site served over HTTPS cannot call an `http://`
+  API — the browser blocks it as mixed content — so `http://localhost:3000`
+  will not work from the deployed site.
+
+Also add the Netlify domain to `CORS_ORIGINS` in the backend environment, or the
+browser will reject the responses.
+
+To check a production build locally before pushing:
+
+```bash
+npx expo export --platform web
+npx serve dist
+```
 
 ## Get a fresh project
 
