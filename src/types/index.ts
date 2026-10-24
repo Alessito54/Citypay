@@ -30,6 +30,9 @@ export interface Report {
   icon: string;
   /** true when the record only exists on this device (no backend). */
   localOnly?: boolean;
+  /** Pin chosen on the map, when the citizen marked one. */
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface NewReportInput {
@@ -39,6 +42,9 @@ export interface NewReportInput {
   direccion: string;
   descripcion: string;
   fotos: string[];
+  /** Optional pin from the map (OpenStreetMap). The backend DTO already accepts these fields. */
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Session {

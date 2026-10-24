@@ -18,8 +18,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/icon';
+import { LocationMap } from '@/components/map/location-map';
 import { FieldMessage, PrimaryButton, SelectField } from '@/components/ui';
 import { C, FONT, TOUCH } from '@/constants/colors';
+import { fmtCoords, geocoding, type Coords } from '@/services/geocoding';
 import type { NewReportInput } from '@/types';
 
 import { useReports } from './reports-context';
@@ -45,6 +47,7 @@ const PRIORIDADES: { id: NewReportInput['prioridad']; label: string; hint: strin
 
 type SendState = 'idle' | 'sending' | 'sent' | 'error';
 type Errors = { addr?: string; desc?: string; send?: string };
+type MapNote = { text: string; tone: 'info' | 'success' | 'error' } | null;
 
 export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent: () => void }) {
   const insets = useSafeAreaInsets();
@@ -58,6 +61,12 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
   const [state, setState] = useState<SendState>('idle');
   const [errors, setErrors] = useState<Errors>({});
   const [locating, setLocating] = useState(false);
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [geoBusy, setGeoBusy] = useState<'search' | 'reverse' | null>(null);
+  const [mapNote, setMapNote] = useState<MapNote>(null);
+  /** Address text that the current pin corresponds to; "Buscar en el mapa" is offered only when the text changed. */
+  const [resolvedAddr, setResolvedAddr] = useState('');
+  const [mapTouch, setMapTouch] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const addrRef = useRef<TextInput>(null);
@@ -85,6 +94,37 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
     }
   };
 
+  /** Fills the address from a point (map tap, dragged pin or GPS) using OpenStreetMap's Nominatim. */
+  const fillAddressFrom = async (c: Coords, origin: 'map' | 'gps') => {
+    setGeoBusy('reverse');
+    let label = (await geocoding.reverse(c)).label;
+    // Native fallback: the OS geocoder still works if Nominatim is unreachable.
+    if (label === fmtCoords(c) && Platform.OS !== 'web') {
+      try {
+        const [a] = await Location.reverseGeocodeAsync(c);
+        const parts = [a?.street && `${a.street}${a.streetNumber ? ` #${a.streetNumber}` : ''}`, a?.city, a?.region].filter(Boolean);
+        if (parts.length) label = parts.join(', ');
+      } catch {
+        /* keep coordinates */
+      }
+    }
+    setGeoBusy(null);
+    setAddr(label);
+    setResolvedAddr(label);
+    setErrors((e) => ({ ...e, addr: undefined }));
+    const text =
+      origin === 'map'
+        ? 'Marcamos el lugar en el mapa y completamos la dirección. Revísala y corrígela si hace falta.'
+        : 'Usamos tu ubicación actual. Puedes mover el marcador si el lugar exacto es otro.';
+    setMapNote({ text, tone: 'success' });
+    AccessibilityInfo.announceForAccessibility(`Ubicación: ${label}`);
+  };
+
+  const onMapPick = (c: Coords) => {
+    setCoords(c);
+    fillAddressFrom(c, 'map');
+  };
+
   const useMyLocation = async () => {
     setLocating(true);
     try {
@@ -94,21 +134,36 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
         return;
       }
       const pos = await Location.getCurrentPositionAsync({});
-      let text = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
-      try {
-        const [a] = await Location.reverseGeocodeAsync(pos.coords);
-        const parts = [a?.street && `${a.street}${a.streetNumber ? ` #${a.streetNumber}` : ''}`, a?.city, a?.region].filter(Boolean);
-        if (parts.length) text = parts.join(', ');
-      } catch {
-        /* keep coordinates */
-      }
-      setAddr(text);
-      setErrors((e) => ({ ...e, addr: undefined }));
-      AccessibilityInfo.announceForAccessibility(`Ubicación agregada: ${text}`);
+      const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setCoords(c);
+      await fillAddressFrom(c, 'gps');
     } catch {
-      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección manualmente.');
+      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección o toca el mapa.');
     } finally {
       setLocating(false);
+    }
+  };
+
+  /** Address text → pin on the map. The typed text is kept as written by the user. */
+  const searchOnMap = async () => {
+    const q = addr.trim();
+    if (q.length < 4 || geoBusy) return;
+    setGeoBusy('search');
+    setMapNote(null);
+    try {
+      const r = await geocoding.search(q, coords);
+      if (r) {
+        setCoords({ latitude: r.latitude, longitude: r.longitude });
+        setResolvedAddr(addr);
+        setMapNote({ text: `Encontrado: ${r.label}. Si no es el lugar exacto, toca el mapa o arrastra el marcador.`, tone: 'success' });
+        AccessibilityInfo.announceForAccessibility('Dirección encontrada en el mapa');
+      } else {
+        setMapNote({ text: 'No encontramos esa dirección en el mapa. Agrega la colonia o la ciudad, o toca el mapa para marcar el lugar.', tone: 'info' });
+      }
+    } catch {
+      setMapNote({ text: 'No se pudo buscar en el mapa. Revisa tu conexión; puedes enviar el reporte solo con la dirección.', tone: 'error' });
+    } finally {
+      setGeoBusy(null);
     }
   };
 
@@ -128,7 +183,16 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
 
     setState('sending');
     try {
-      await submitReport({ categoria: cat, problema: prob, prioridad: pri, direccion: addr.trim(), descripcion: desc.trim(), fotos: photos });
+      await submitReport({
+        categoria: cat,
+        problema: prob,
+        prioridad: pri,
+        direccion: addr.trim(),
+        descripcion: desc.trim(),
+        fotos: photos,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
+      });
       setState('sent');
       AccessibilityInfo.announceForAccessibility('Reporte enviado. Te llevaremos a la lista de reportes.');
       setTimeout(onSent, 1600);
@@ -153,7 +217,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
         <View style={{ width: 48 }} />
       </View>
 
-      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.body}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" scrollEnabled={!mapTouch} contentContainerStyle={s.body}>
         <Text style={s.sub}>Cuéntanos qué pasa y dónde. Los campos marcados como obligatorios son necesarios para enviarlo.</Text>
 
         <Group label="¿Qué tipo de problema es?" required>
@@ -206,29 +270,74 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
                   if (t.trim()) setErrors((e) => ({ ...e, addr: undefined }));
                 }}
                 accessibilityLabel="Ubicación del problema, obligatorio"
+                accessibilityHint="Al terminar, usa Buscar en el mapa para colocar el marcador"
                 placeholder="Calle, número y colonia"
                 placeholderTextColor={C.text3}
-                returnKeyType="next"
-                onSubmitEditing={() => descRef.current?.focus()}
+                returnKeyType="search"
+                onSubmitEditing={searchOnMap}
                 style={s.addrInput}
               />
               {addr ? (
-                <Pressable accessibilityRole="button" accessibilityLabel="Borrar ubicación" onPress={() => setAddr('')} style={s.clear}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Borrar ubicación"
+                  onPress={() => {
+                    setAddr('');
+                    setResolvedAddr('');
+                    setCoords(null);
+                    setMapNote(null);
+                  }}
+                  style={s.clear}>
                   <Icon name="xCircle" size={18} color={C.text2} />
                 </Pressable>
               ) : null}
             </View>
             <FieldMessage text={errors.addr} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={locating ? 'Obteniendo tu ubicación' : 'Usar mi ubicación actual'}
-              accessibilityState={{ busy: locating, disabled: locating }}
-              onPress={useMyLocation}
-              disabled={locating}
-              style={({ pressed }) => [s.locate, pressed && { backgroundColor: C.blueIcon }]}>
-              {locating ? <ActivityIndicator size="small" color={C.blue} /> : <Icon name="locate" size={18} color={C.blue} />}
-              <Text style={s.locateText}>{locating ? 'Obteniendo ubicación…' : 'Usar mi ubicación actual'}</Text>
-            </Pressable>
+            <View style={s.locRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={locating ? 'Obteniendo tu ubicación' : 'Usar mi ubicación actual'}
+                accessibilityState={{ busy: locating, disabled: locating }}
+                onPress={useMyLocation}
+                disabled={locating}
+                style={({ pressed }) => [s.locate, pressed && { backgroundColor: C.blueIcon }]}>
+                {locating ? <ActivityIndicator size="small" color={C.blue} /> : <Icon name="locate" size={18} color={C.blue} />}
+                <Text style={s.locateText}>{locating ? 'Ubicando…' : 'Mi ubicación'}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={geoBusy === 'search' ? 'Buscando en el mapa' : 'Buscar la dirección en el mapa'}
+                accessibilityState={{ busy: geoBusy === 'search', disabled: addr.trim().length < 4 || !!geoBusy }}
+                onPress={searchOnMap}
+                disabled={addr.trim().length < 4 || !!geoBusy}
+                style={({ pressed }) => [
+                  s.locate,
+                  (addr.trim().length < 4 || addr === resolvedAddr) && s.locateQuiet,
+                  pressed && { backgroundColor: C.blueIcon },
+                ]}>
+                {geoBusy === 'search' ? <ActivityIndicator size="small" color={C.blue} /> : <Icon name="search" size={18} color={C.blue} />}
+                <Text style={s.locateText}>{geoBusy === 'search' ? 'Buscando…' : 'Buscar en el mapa'}</Text>
+              </Pressable>
+            </View>
+            <LocationMap
+              coords={coords}
+              onPick={onMapPick}
+              onTouchActiveChange={setMapTouch}
+              height={210}
+              accessibilityLabel={coords ? `Mapa con marcador en ${addr || fmtCoords(coords)}` : 'Mapa sin marcador'}
+              accessibilityHint="Para marcar el lugar con lector de pantalla, escribe la dirección y usa Buscar en el mapa, o usa Mi ubicación"
+            />
+            <View style={s.mapStatus} accessibilityLiveRegion="polite">
+              {geoBusy === 'reverse' ? (
+                <Text style={s.mapStatusText}>Buscando la dirección de ese punto…</Text>
+              ) : mapNote ? (
+                <FieldMessage text={mapNote.text} tone={mapNote.tone} />
+              ) : (
+                <Text style={s.mapStatusText}>
+                  {coords ? `Marcador en ${fmtCoords(coords)}.` : 'Opcional: toca el mapa para marcar el lugar exacto.'}
+                </Text>
+              )}
+            </View>
           </Group>
         </View>
 
@@ -356,8 +465,12 @@ const s = StyleSheet.create({
   addrInput: { flex: 1, minWidth: 0, minHeight: 48, fontFamily: FONT.sans, fontSize: 16, color: C.text1, paddingVertical: 0, paddingRight: 12 },
   clear: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   inputErr: { borderColor: C.danger, borderWidth: 1.5, backgroundColor: C.dangerSoft },
-  locate: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 12, borderWidth: 1.5, borderColor: C.blue, backgroundColor: C.blueSoft },
-  locateText: { fontFamily: FONT.sansBold, fontSize: 14.5, color: C.blue },
+  locRow: { flexDirection: 'row', gap: 8 },
+  locate: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 46, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1.5, borderColor: C.blue, backgroundColor: C.blueSoft },
+  locateQuiet: { borderColor: C.inputBorder, backgroundColor: '#fff' },
+  mapStatus: { minHeight: 20 },
+  mapStatusText: { fontFamily: FONT.sans, fontSize: 13, color: C.text2, lineHeight: 18 },
+  locateText: { fontFamily: FONT.sansBold, fontSize: 14, color: C.blue, flexShrink: 1 },
   desc: { minHeight: 110, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: C.inputBorder, fontFamily: FONT.sans, fontSize: 16, lineHeight: 22, color: C.text1, backgroundColor: '#fff' },
   descMeta: { flexDirection: 'row', justifyContent: 'space-between' },
   metaText: { fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.text2 },

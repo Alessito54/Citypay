@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/app-header';
 import { HeaderLogo } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icon';
+import { LocationMap } from '@/components/map/location-map';
 import { cardShadow, EmptyState, PrimaryButton, SelectField } from '@/components/ui';
 import { C, FONT, TOUCH } from '@/constants/colors';
 import type { Report, ReportEstado } from '@/types';
@@ -237,6 +238,14 @@ function ReportDetail({ report, onClose }: { report: Report | null; onClose: () 
                 })}
               </View>
             </View>
+            {report.latitude != null && report.longitude != null ? (
+              <LocationMap
+                coords={{ latitude: report.latitude, longitude: report.longitude }}
+                interactive={false}
+                height={170}
+                accessibilityLabel={`Mapa con la ubicación del reporte: ${report.address}`}
+              />
+            ) : null}
             <View style={s.infoBox}>
               {rows.map((row, i) => (
                 <View
