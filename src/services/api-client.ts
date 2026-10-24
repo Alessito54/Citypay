@@ -14,6 +14,16 @@ export class ApiError extends Error {
   }
 }
 
+let activeAuthToken: string | null = null;
+
+export function setActiveAuthToken(token: string | null) {
+  activeAuthToken = token;
+}
+
+export function getActiveAuthToken(): string | null {
+  return activeAuthToken;
+}
+
 export async function apiClient<T = any>(
   endpoint: string,
   options: RequestInit & { requiresAuth?: boolean } = {},
@@ -28,16 +38,20 @@ export async function apiClient<T = any>(
     ...(customHeaders as Record<string, string>),
   };
 
-  if (requiresAuth) {
-    try {
-      const auth = getFirebaseAuth();
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const token = await currentUser.getIdToken();
-        headers.Authorization = `Bearer ${token}`;
+  if (requiresAuth && !headers.Authorization) {
+    if (activeAuthToken) {
+      headers.Authorization = `Bearer ${activeAuthToken}`;
+    } else {
+      try {
+        const auth = getFirebaseAuth();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const token = await currentUser.getIdToken();
+          headers.Authorization = `Bearer ${token}`;
+        }
+      } catch {
+        // Auth token retrieval failed or auth not initialized
       }
-    } catch {
-      // Auth token retrieval failed or auth not initialized
     }
   }
 

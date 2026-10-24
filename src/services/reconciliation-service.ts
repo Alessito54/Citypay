@@ -1,6 +1,5 @@
 import type { Transaction } from '@/types';
 import { apiClient } from './api-client';
-import { DEMO_TRANSACTIONS } from './demo-data';
 
 export interface ForceReconcileInput {
   transactionId: string;
@@ -11,15 +10,28 @@ export interface ForceReconcileInput {
 export const reconciliationService = {
   isDemo: false,
 
-  async listTransactions(): Promise<Transaction[]> {
+  async listTransactions(isAdmin = false): Promise<Transaction[]> {
     try {
-      const transactions = await apiClient<Transaction[]>('/payments');
-      if (Array.isArray(transactions) && transactions.length > 0) {
-        return transactions;
-      }
-      return DEMO_TRANSACTIONS;
+      const endpoint = isAdmin ? '/payments' : '/payments/me';
+      const transactions = await apiClient<Transaction[]>(endpoint);
+      return Array.isArray(transactions) ? transactions : [];
     } catch {
-      return DEMO_TRANSACTIONS;
+      return [];
+    }
+  },
+
+  async getAnalytics(): Promise<{
+    totalSistema: number;
+    totalBanco: number;
+    cuadrados: number;
+    discrepancias: number;
+    pendientes: number;
+    totalCount: number;
+  }> {
+    try {
+      return await apiClient('/payments/analytics');
+    } catch {
+      return { totalSistema: 0, totalBanco: 0, cuadrados: 0, discrepancias: 0, pendientes: 0, totalCount: 0 };
     }
   },
 

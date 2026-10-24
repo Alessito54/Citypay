@@ -4,7 +4,7 @@ import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
-import { HeaderLogo } from '@/components/brand';
+import { AdminLogo, HeaderLogo } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icon';
 import { LocationMap } from '@/components/map/location-map';
 import { cardShadow, EmptyState, PrimaryButton, SelectField } from '@/components/ui';
@@ -12,6 +12,7 @@ import { C, FONT, TOUCH } from '@/constants/colors';
 import type { Report, ReportEstado } from '@/types';
 
 import { useReports } from './reports-context';
+import { useAuth } from '@/features/auth/auth-context';
 
 const ESTADO_STYLE: Record<ReportEstado, { bg: string; fg: string; dot: string }> = {
   Nuevo: { bg: C.blueSoft, fg: C.blue, dot: C.blue },
@@ -25,6 +26,8 @@ const PRIORIDADES = ['Todas', 'Alta', 'Media', 'Baja'];
 
 export function ReportsScreen() {
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
+  const isAdmin = session?.role === 'admin';
   const { reports } = useReports();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('Todos');
@@ -57,7 +60,7 @@ export function ReportsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={{ paddingTop: insets.top, backgroundColor: C.white }}>
-        <AppHeader logo={<HeaderLogo />} badgeCount={3} onAvatarPress={() => router.navigate('/profile')} />
+        <AppHeader logo={isAdmin ? <AdminLogo /> : <HeaderLogo />} badgeCount={isAdmin ? count('Nuevo') : 0} onAvatarPress={() => router.navigate('/profile')} />
       </View>
       <FlatList
         data={list}
@@ -70,9 +73,13 @@ export function ReportsScreen() {
             <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 12 }}>
               <View>
                 <Text accessibilityRole="header" style={s.h1}>
-                  Reportes
+                  {isAdmin ? 'Reportes Municipales' : 'Mis Reportes Ciudadanos'}
                 </Text>
-                <Text style={s.sub}>Reporta un problema de tu ciudad o consulta su seguimiento.</Text>
+                <Text style={s.sub}>
+                  {isAdmin
+                    ? 'Supervisa y gestiona las incidencias reportadas en toda la ciudad.'
+                    : 'Historial y estatus de atención de tus reportes.'}
+                </Text>
               </View>
               {/* Primary task first: it used to sit below four filters. */}
               <PrimaryButton accessibilityLabel="Crear nuevo reporte" onPress={() => router.push('/new-report')}>
@@ -127,12 +134,25 @@ export function ReportsScreen() {
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            title="No hay reportes con esos filtros"
-            body="Prueba con otra búsqueda o quita algunos filtros."
-            actionLabel="Limpiar filtros"
-            onAction={clearAll}
-          />
+          activeFilters > 0 ? (
+            <EmptyState
+              title="No hay reportes con esos filtros"
+              body="Prueba con otra búsqueda o quita algunos filtros."
+              actionLabel="Limpiar filtros"
+              onAction={clearAll}
+            />
+          ) : (
+            <EmptyState
+              title={isAdmin ? 'No hay reportes en el sistema' : 'Aún no has generado ningún reporte'}
+              body={
+                isAdmin
+                  ? 'El municipio no tiene reportes ciudadanos registrados en la base de datos.'
+                  : 'Si detectas una fuga de agua, bache, luminaria rota o contenedor desbordado, repórtalo con foto y ubicación para que el municipio lo atienda.'
+              }
+              actionLabel={!isAdmin ? 'Crear mi primer reporte' : undefined}
+              onAction={!isAdmin ? () => router.push('/new-report') : undefined}
+            />
+          )
         }
         renderItem={({ item }) => <ReportCard r={item} onPress={() => setDetail(item)} />}
       />
@@ -259,7 +279,7 @@ function ReportDetail({ report, onClose }: { report: Report | null; onClose: () 
               ))}
             </View>
             {report.localOnly ? (
-              <Text style={s.localNote}>Este reporte se guardó solo en este dispositivo (modo demostración).</Text>
+              <Text style={s.localNote}>Este reporte se guardó solo en este dispositivo porque no se pudo contactar al servidor municipal.</Text>
             ) : null}
             <Pressable accessibilityRole="button" onPress={onClose} style={s.doneBtn}>
               <Text style={s.doneBtnText}>Cerrar</Text>

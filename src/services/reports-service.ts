@@ -1,6 +1,5 @@
 import type { NewReportInput, Report } from '@/types';
 import { apiClient } from './api-client';
-import { DEMO_REPORTS } from './demo-data';
 
 const ICONS: Record<string, string> = {
   'Alumbrado público': '💡',
@@ -60,10 +59,9 @@ export const reportsService = {
   async list(): Promise<Report[]> {
     try {
       const reports = await apiClient<Report[]>('/reports');
-      return reports;
+      return Array.isArray(reports) ? reports : [];
     } catch {
-      // Graceful fallback to demo reports if offline or unauthenticated
-      return DEMO_REPORTS;
+      return [];
     }
   },
 
@@ -93,7 +91,7 @@ export const reportsService = {
       });
 
       return created;
-    } catch (err: any) {
+    } catch {
       // If backend request fails, return local record with error explanation
       return {
         id: `local-${Date.now()}`,

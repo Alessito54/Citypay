@@ -60,6 +60,12 @@ export class UsersService {
     return user;
   }
 
+  async findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { email: email.toLowerCase().trim() },
+    });
+  }
+
   async findByFirebaseUid(firebaseUid: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { firebaseUid } });
   }
@@ -71,18 +77,70 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async updateUser(id: string, dto: { displayName?: string; phone?: string; role?: UserRole }): Promise<User> {
+    const user = await this.findById(id);
+    if (dto.displayName !== undefined) user.displayName = dto.displayName;
+    if (dto.phone !== undefined) user.phone = dto.phone;
+    if (dto.role !== undefined) user.role = dto.role;
+    return this.usersRepository.save(user);
+  }
+
   async updateRole(id: string, dto: UpdateUserRoleDto): Promise<User> {
     const user = await this.findById(id);
     user.role = dto.role;
     return this.usersRepository.save(user);
   }
 
-  async findAll(limit = 50, offset = 0): Promise<{ items: User[]; total: number }> {
-    const [items, total] = await this.usersRepository.findAndCount({
+  async deleteUser(id: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.findById(id);
+    if (user.role === UserRole.ADMIN) {
+      throw new Error('No es posible eliminar una cuenta de administrador.');
+    }
+    await this.usersRepository.delete(id);
+    return { success: true, message: 'Usuario eliminado exitosamente.' };
+  }
+
+  async findAll(limit = 50, offset = 0): Promise<{ items: any[]; total: number }> {
+    const [users, total] = await this.usersRepository.findAndCount({
       take: limit,
       skip: offset,
       order: { createdAt: 'DESC' },
     });
+
+    // Query stats for each user
+    const userIds = users.map((u) => u.id);
+    let paymentCounts: Record<string, number> = {};
+    let reportCounts: Record<string, number> = {};
+
+    if (userIds.length > 0) {
+      try {
+        const pCounts = await this.usersRepository.query(
+          `SELECT "user_id", COUNT(*) as count FROM "payments" WHERE "user_id" = ANY($1) GROUP BY "user_id"`,
+          [userIds],
+        );
+        paymentCounts = Object.fromEntries(pCounts.map((r: any) => [r.user_id, Number(r.count)]));
+
+        const rCounts = await this.usersRepository.query(
+          `SELECT "user_id", COUNT(*) as count FROM "citizen_reports" WHERE "user_id" = ANY($1) GROUP BY "user_id"`,
+          [userIds],
+        );
+        reportCounts = Object.fromEntries(rCounts.map((r: any) => [r.user_id, Number(r.count)]));
+      } catch {
+        // Fallback if queries fail
+      }
+    }
+
+    const items = users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      role: u.role,
+      phone: u.phone,
+      createdAt: u.createdAt,
+      paymentsCount: paymentCounts[u.id] || 0,
+      reportsCount: reportCounts[u.id] || 0,
+    }));
+
     return { items, total };
   }
 }

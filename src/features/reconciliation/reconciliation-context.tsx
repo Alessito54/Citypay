@@ -1,8 +1,8 @@
 import { AccessibilityInfo } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { DEMO_TRANSACTIONS } from '@/services/demo-data';
 import { reconciliationService } from '@/services/reconciliation-service';
+import { useAuth } from '@/features/auth/auth-context';
 import type { Transaction } from '@/types';
 
 type Phase = 'closed' | 'detail' | 'force';
@@ -24,21 +24,25 @@ interface ReconciliationValue {
 const Ctx = createContext<ReconciliationValue | null>(null);
 
 export function ReconciliationProvider({ children }: { children: ReactNode }) {
-  const [transactions, setTransactions] = useState<Transaction[]>(DEMO_TRANSACTIONS);
+  const { session } = useAuth();
+  const isAdmin = session?.role === 'admin';
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [resolvedIds, setResolvedIds] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [phase, setPhase] = useState<Phase>('closed');
 
   const refreshTransactions = useCallback(async () => {
     try {
-      const list = await reconciliationService.listTransactions();
+      const list = await reconciliationService.listTransactions(isAdmin);
       setTransactions(list);
     } catch {
       // Keep existing transactions
     }
-  }, []);
+  }, [isAdmin]);
 
+  // Mount-time fetch: the provider owns this data, so the request belongs here.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshTransactions();
   }, [refreshTransactions]);
 

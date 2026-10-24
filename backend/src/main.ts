@@ -56,10 +56,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Render (and most container hosts) inject PORT and require 0.0.0.0, since
+  // binding to localhost makes the service unreachable from outside the container.
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`CityPay Backend listening on port ${port}`);
-  logger.log(`API Documentation available at: http://localhost:${port}/api/docs`);
+  logger.log(`API documentation available at /api/docs`);
 }
 
 void bootstrap();

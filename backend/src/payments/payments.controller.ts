@@ -29,6 +29,19 @@ export class PaymentsController {
     return list.map(this.mapToDto);
   }
 
+  @Get('analytics')
+  @Roles(UserRole.ADMIN, UserRole.MUNICIPAL_OFFICIAL, UserRole.MUNICIPAL_SUPERVISOR)
+  async getAnalytics() {
+    return this.paymentsService.getAnalytics();
+  }
+
+  @Get('user/:userId')
+  @Roles(UserRole.ADMIN, UserRole.MUNICIPAL_OFFICIAL, UserRole.MUNICIPAL_SUPERVISOR)
+  async getPaymentsByUser(@Param('userId', ParseUUIDPipe) userId: string) {
+    const list = await this.paymentsService.findByUser(userId);
+    return list.map(this.mapToDto);
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.MUNICIPAL_OFFICIAL, UserRole.MUNICIPAL_SUPERVISOR)
   async findAll(

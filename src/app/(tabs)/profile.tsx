@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { confirmAction } from '@/components/confirm';
 import { Icon } from '@/components/icon';
 import { C, FONT } from '@/constants/colors';
 import { useAuth } from '@/features/auth/auth-context';
@@ -35,17 +36,16 @@ export default function Profile() {
         accessibilityRole="button"
         accessibilityHint="Te pedirá confirmación antes de salir"
         onPress={() =>
-          Alert.alert('¿Cerrar sesión?', 'Tendrás que volver a ingresar tu correo y contraseña.', [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Cerrar sesión',
-              style: 'destructive',
-              onPress: async () => {
-                await signOut();
-                router.replace('/login');
-              },
+          confirmAction({
+            title: '¿Cerrar sesión?',
+            message: 'Tendrás que volver a ingresar tu correo y contraseña.',
+            confirmLabel: 'Cerrar sesión',
+            destructive: true,
+            onConfirm: async () => {
+              await signOut();
+              router.replace('/login');
             },
-          ])
+          })
         }
         style={s.btn}>
         <Icon name="logout" size={18} color={C.blue} />

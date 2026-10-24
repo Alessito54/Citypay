@@ -95,4 +95,35 @@ export class PaymentsService {
 
     return this.paymentRepository.save(payment);
   }
+  async findByUser(userId: string): Promise<Payment[]> {
+    return this.paymentRepository.find({
+      where: { userId },
+      order: { paymentDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async getAnalytics(): Promise<{
+    totalSistema: number;
+    totalBanco: number;
+    cuadrados: number;
+    discrepancias: number;
+    pendientes: number;
+    totalCount: number;
+  }> {
+    const payments = await this.paymentRepository.find();
+    const totalSistema = payments.reduce((sum, p) => sum + Number(p.systemAmount), 0);
+    const totalBanco = payments.reduce((sum, p) => sum + Number(p.bankAmount), 0);
+    const cuadrados = payments.filter((p) => p.status === PaymentStatus.CONCILIADO).length;
+    const discrepancias = payments.filter((p) => p.status === PaymentStatus.DISCREPANCIA).length;
+    const pendientes = payments.filter((p) => p.status === PaymentStatus.PENDIENTE).length;
+
+    return {
+      totalSistema,
+      totalBanco,
+      cuadrados,
+      discrepancias,
+      pendientes,
+      totalCount: payments.length,
+    };
+  }
 }

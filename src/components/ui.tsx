@@ -62,24 +62,31 @@ export function KpiCard({
   label: string;
   value: string;
   sub: string;
-  trend: number;
+  /** Omit when there is no historical baseline to compare against. */
+  trend?: number;
   trendLabel?: string;
 }) {
-  const up = trend > 0;
+  const up = (trend ?? 0) > 0;
   return (
     <View
       style={s.kpi}
       accessible
-      accessibilityLabel={`${label}: ${value} ${sub}. ${up ? 'Subió' : 'Bajó'} ${Math.abs(trend)} por ciento ${trendLabel}.`}>
+      accessibilityLabel={
+        trend === undefined
+          ? `${label}: ${value} ${sub}.`
+          : `${label}: ${value} ${sub}. ${up ? 'Subió' : 'Bajó'} ${Math.abs(trend)} por ciento ${trendLabel}.`
+      }>
       <View style={s.kpiIcon}>
         <Icon name={icon} color={C.blue} />
       </View>
       <Text style={s.kpiLabel}>{label}</Text>
       <Text style={s.kpiValue}>{value}</Text>
       <Text style={s.kpiSub}>{sub}</Text>
-      <Text style={s.kpiTrend}>
-        {up ? '↑' : '↓'} {Math.abs(trend)}% {trendLabel}
-      </Text>
+      {trend === undefined ? null : (
+        <Text style={s.kpiTrend}>
+          {up ? '↑' : '↓'} {Math.abs(trend)}% {trendLabel}
+        </Text>
+      )}
     </View>
   );
 }

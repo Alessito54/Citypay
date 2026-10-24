@@ -2,21 +2,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { notify } from '@/components/confirm';
 import { Icon, type IconName } from '@/components/icon';
 import { LocationMap } from '@/components/map/location-map';
 import { FieldMessage, PrimaryButton, SelectField } from '@/components/ui';
@@ -75,7 +64,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
 
   const addPhoto = async (source: 'camera' | 'library') => {
     if (photos.length >= MAX_PHOTOS) {
-      Alert.alert('Evidencia', `Puedes adjuntar hasta ${MAX_PHOTOS} imágenes.`);
+      notify('Evidencia', `Puedes adjuntar hasta ${MAX_PHOTOS} imágenes.`);
       return;
     }
     const perm =
@@ -83,7 +72,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permiso requerido', 'Concede el permiso en los ajustes del dispositivo para adjuntar imágenes.');
+      notify('Permiso requerido', 'Concede el permiso en los ajustes del dispositivo para adjuntar imágenes.');
       return;
     }
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.7 };
@@ -130,7 +119,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permiso requerido', 'Concede acceso a la ubicación para usar esta opción, o escribe la dirección.');
+        notify('Permiso requerido', 'Concede acceso a la ubicación para usar esta opción, o escribe la dirección.');
         return;
       }
       const pos = await Location.getCurrentPositionAsync({});
@@ -138,7 +127,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
       setCoords(c);
       await fillAddressFrom(c, 'gps');
     } catch {
-      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección o toca el mapa.');
+      notify('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección o toca el mapa.');
     } finally {
       setLocating(false);
     }
@@ -418,7 +407,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
             </>
           )}
         </PrimaryButton>
-        {busy ? null : <Text style={s.footHint}>Modo demostración: el reporte se guarda en este dispositivo.</Text>}
+        {busy ? null : <Text style={s.footHint}>Se enviará al sistema municipal con tu ubicación y fotos.</Text>}
       </View>
     </KeyboardAvoidingView>
   );
