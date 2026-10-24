@@ -88,6 +88,18 @@ configuration > Environment variables**. Expo inlines them into the client
 bundle *at build time*, so a variable added afterwards needs a redeploy to take
 effect. `netlify.toml` lists the full set.
 
+**Do not mark any of them as "secret."** Netlify may warn that the Firebase API
+key looks sensitive, but a Firebase web API key identifies the project rather
+than granting access — access is controlled by Firebase Security Rules and the
+authorised-domain list, and the key ships in every client build by design.
+Marking it secret makes the build fail, because Netlify's scanner finds the
+value in the generated bundle. `netlify.toml` already lists these keys under
+`SECRETS_SCAN_OMIT_KEYS` for that reason.
+
+Add the Netlify domain to **Firebase Console > Authentication > Settings >
+Authorised domains**, or sign-in from the deployed site fails with
+`auth/unauthorized-domain`.
+
 Two things this does not cover:
 
 - **The backend is not deployed by this.** Netlify serves static files and
