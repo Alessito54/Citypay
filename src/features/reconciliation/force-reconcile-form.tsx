@@ -11,8 +11,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/icon';
+import { FieldMessage, PrimaryButton } from '@/components/ui';
 import { C, FONT } from '@/constants/colors';
 
+import { fmtMoney } from './format';
 import { useReconciliation } from './reconciliation-context';
 
 const OTHER = 'Otro motivo (especificar)';
@@ -23,9 +26,10 @@ const REASONS = [
   'Instrucción de tesorería municipal',
   OTHER,
 ];
+const MIN_NOTES = 11;
 
 export function ForceReconcileForm() {
-  const { cancelForce, confirmForce } = useReconciliation();
+  const { selected, cancelForce, confirmForce } = useReconciliation();
   const insets = useSafeAreaInsets();
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
@@ -35,8 +39,15 @@ export function ForceReconcileForm() {
 
   const needsNotes = reason === OTHER;
   const notesLen = notes.trim().length;
-  const notesOk = !needsNotes || notesLen > 10;
+  const notesOk = !needsNotes || notesLen >= MIN_NOTES;
   const canConfirm = reason !== '' && checked && notesOk && !busy;
+
+  // Tell the user exactly what is still missing instead of a silently disabled button.
+  const missing = [
+    reason === '' && 'elige un motivo',
+    needsNotes && !notesOk && `escribe al menos ${MIN_NOTES} caracteres en las notas`,
+    !checked && 'marca la casilla de confirmación',
+  ].filter(Boolean) as string[];
 
   const submit = async () => {
     if (!canConfirm) return;
@@ -45,7 +56,7 @@ export function ForceReconcileForm() {
     try {
       await confirmForce(reason, notes.trim());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo completar la acción.');
+      setError(e instanceof Error ? e.message : 'No se pudo completar la acción. Inténtalo de nuevo.');
       setBusy(false);
     }
   };
@@ -54,31 +65,42 @@ export function ForceReconcileForm() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ maxHeight: '92%' }}>
       <View style={s.sheet} accessibilityViewIsModal>
         <View style={s.handle} />
-        <View style={s.banner}>
+        <View style={s.top}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Volver al detalle del pago" onPress={cancelForce} style={s.back}>
+            <Icon name="chevronLeft" size={22} color={C.text1} />
+          </Pressable>
+          <Text accessibilityRole="header" style={s.topTitle}>
+            Conciliar manualmente
+          </Text>
+        </View>
+        <View style={s.banner} accessible>
           <View style={s.bannerIcon}>
-            <Text style={{ fontSize: 18 }}>⚠️</Text>
+            <Icon name="warn" size={20} color={C.danger} strokeWidth={2.2} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.bannerTitle}>Confirmar conciliación forzada</Text>
+            <Text style={s.bannerTitle}>
+              {selected ? `${selected.folio} · ${fmtMoney(selected.montoSistema)}` : 'Conciliación forzada'}
+            </Text>
             <Text style={s.bannerSub}>Esta acción es permanente y quedará en el registro de auditoría.</Text>
           </View>
         </View>
 
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18 }}>
-          <Text style={s.q}>
-            Motivo de conciliación manual <Text style={{ color: C.blueMid }}>*</Text>
+          <Text style={s.q} nativeID="motivoLabel">
+            1. Motivo de la conciliación <Text style={{ color: C.danger }}>(obligatorio)</Text>
           </Text>
-          <View style={s.list}>
+          <View style={s.list} accessibilityRole="radiogroup" accessibilityLabelledBy="motivoLabel">
             {REASONS.map((r, i) => {
               const on = reason === r;
               return (
                 <Pressable
                   key={r}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={r}
+                  accessibilityState={{ checked: on }}
                   onPress={() => setReason(r)}
-                  style={[s.reason, i < REASONS.length - 1 && s.reasonDivider, on && { backgroundColor: '#F0F5FF' }]}>
-                  <View style={[s.radio, on ? { borderWidth: 6, borderColor: C.blue } : { borderWidth: 2, borderColor: '#CBD5E1' }]} />
+                  style={[s.reason, i < REASONS.length - 1 && s.reasonDivider, on && { backgroundColor: C.blueSoft }]}>
+                  <View style={[s.radio, on ? { borderWidth: 6, borderColor: C.blue } : { borderWidth: 2, borderColor: C.inputBorder }]} />
                   <Text style={[s.reasonText, on && { color: C.blue, fontFamily: FONT.sansSemi }]}>{r}</Text>
                 </Pressable>
               );
@@ -86,21 +108,25 @@ export function ForceReconcileForm() {
           </View>
 
           {reason !== '' ? (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={s.notesLabel}>
-                Notas adicionales {needsNotes ? <Text style={{ color: C.blueMid }}>*</Text> : null}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={s.q}>
+                2. Notas {needsNotes ? <Text style={{ color: C.danger }}>(obligatorio)</Text> : <Text style={{ color: C.text2 }}>(opcional)</Text>}
               </Text>
               <TextInput
                 multiline
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Describa la situación para el historial de auditoría…"
+                accessibilityLabel={needsNotes ? `Notas, obligatorio, mínimo ${MIN_NOTES} caracteres` : 'Notas, opcional'}
+                placeholder="Describe la situación para el historial de auditoría…"
                 placeholderTextColor={C.text3}
-                style={s.notes}
+                style={[s.notes, needsNotes && notesLen > 0 && !notesOk && { borderColor: C.danger }]}
                 textAlignVertical="top"
               />
-              {needsNotes && notesLen > 0 && notesLen <= 10 ? (
-                <Text style={s.hint}>Mínimo 11 caracteres requeridos.</Text>
+              {needsNotes ? (
+                <Text style={[s.counter, notesOk && { color: C.success }]}>
+                  {notesOk ? '✓ ' : ''}
+                  {Math.min(notesLen, MIN_NOTES)}/{MIN_NOTES} caracteres mínimos
+                </Text>
               ) : null}
             </View>
           ) : null}
@@ -109,26 +135,34 @@ export function ForceReconcileForm() {
             accessibilityRole="checkbox"
             accessibilityState={{ checked }}
             onPress={() => setChecked((p) => !p)}
-            style={s.check}>
-            <View style={[s.box, checked ? { backgroundColor: C.blue } : { borderWidth: 2, borderColor: '#CBD5E1' }]}>
-              {checked ? <Text style={s.tick}>✓</Text> : null}
+            style={[s.check, checked && { borderColor: C.blue }]}>
+            <View style={[s.box, checked ? { backgroundColor: C.blue } : { borderWidth: 2, borderColor: C.inputBorder }]}>
+              {checked ? <Icon name="check" size={14} color="#fff" strokeWidth={3} /> : null}
             </View>
             <Text style={s.checkText}>
               Confirmo que revisé la documentación de respaldo y asumo responsabilidad por esta operación.
             </Text>
           </Pressable>
-          {error ? <Text style={[s.hint, { marginTop: 10, color: C.danger }]}>{error}</Text> : null}
+          <View style={{ marginTop: 10 }}>
+            <FieldMessage text={error} />
+          </View>
         </ScrollView>
 
-        <View style={[s.actions, { paddingBottom: 24 + insets.bottom }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canConfirm }}
+        <View style={[s.actions, { paddingBottom: 16 + insets.bottom }]}>
+          {missing.length > 0 ? (
+            <Text style={s.missing} accessibilityLiveRegion="polite">
+              Para continuar: {missing.join(', ')}.
+            </Text>
+          ) : null}
+          <PrimaryButton
+            label={busy ? 'Procesando…' : 'Confirmar conciliación'}
+            accessibilityHint={missing.length ? `Falta: ${missing.join(', ')}` : undefined}
+            disabled={!canConfirm && !busy}
+            loading={busy}
             onPress={submit}
-            style={[s.confirm, { backgroundColor: canConfirm ? C.blue : C.blueIcon }]}>
-            <Text style={s.confirmText}>{busy ? 'Procesando…' : 'Confirmar Conciliación Forzada'}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={cancelForce} style={s.cancel}>
+            style={{ shadowOpacity: 0, elevation: 0 }}
+          />
+          <Pressable accessibilityRole="button" onPress={cancelForce} style={({ pressed }) => [s.cancel, pressed && { backgroundColor: C.screen }]}>
             <Text style={s.cancelText}>Cancelar</Text>
           </Pressable>
         </View>
@@ -139,27 +173,27 @@ export function ForceReconcileForm() {
 
 const s = StyleSheet.create({
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', maxHeight: '100%' },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.sheetHandle, marginTop: 14 },
-  banner: { marginHorizontal: 18, marginTop: 12, backgroundColor: C.blueSoft, borderRadius: 14, padding: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: C.blueIcon, flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  bannerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.blueIcon, alignItems: 'center', justifyContent: 'center' },
-  bannerTitle: { fontFamily: FONT.displayXBold, fontSize: 15, color: C.blue },
-  bannerSub: { fontFamily: FONT.sans, fontSize: 12, color: C.blueMid, marginTop: 4, lineHeight: 17 },
-  q: { fontFamily: FONT.sansBold, fontSize: 13.5, color: '#1a1a2e', marginBottom: 10 },
-  list: { backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F2F5', marginBottom: 14 },
-  reason: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14 },
-  reasonDivider: { borderBottomWidth: 1, borderBottomColor: C.screen },
-  radio: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-  reasonText: { flex: 1, fontFamily: FONT.sans, fontSize: 13, color: '#374151' },
-  notesLabel: { fontFamily: FONT.sansSemi, fontSize: 13, color: '#1a1a2e', marginBottom: 8 },
-  notes: { minHeight: 80, padding: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: C.sheetHandle, backgroundColor: '#F8FAFF', fontFamily: FONT.sans, fontSize: 13, color: '#1a1a2e', lineHeight: 19 },
-  hint: { fontFamily: FONT.sans, fontSize: 11, color: C.blueMid, marginTop: 4 },
-  check: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 13, paddingHorizontal: 14, borderRadius: 14, backgroundColor: '#F8FAFF', borderWidth: 1, borderColor: '#E3EAFC' },
-  box: { width: 22, height: 22, borderRadius: 6, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
-  tick: { color: '#fff', fontSize: 13, fontFamily: FONT.sansBold },
-  checkText: { flex: 1, fontFamily: FONT.sans, fontSize: 12.5, color: '#374151', lineHeight: 19 },
-  actions: { paddingHorizontal: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: C.screen, gap: 10, backgroundColor: '#fff' },
-  confirm: { paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
-  confirmText: { fontFamily: FONT.sansBold, fontSize: 15, color: '#fff' },
-  cancel: { paddingVertical: 15, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: C.sheetHandle, backgroundColor: '#fff' },
-  cancelText: { fontFamily: FONT.sansSemi, fontSize: 15, color: '#374151' },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.sheetHandle, marginTop: 12 },
+  top: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingTop: 2 },
+  back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  topTitle: { fontFamily: FONT.displayXBold, fontSize: 18, color: C.text1 },
+  banner: { marginHorizontal: 18, marginTop: 4, backgroundColor: C.dangerSoft, borderRadius: 14, padding: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: '#FECACA', flexDirection: 'row', gap: 12, alignItems: 'center' },
+  bannerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  bannerTitle: { fontFamily: FONT.sansBold, fontSize: 14.5, color: C.text1 },
+  bannerSub: { fontFamily: FONT.sans, fontSize: 13, color: '#7F1D1D', marginTop: 3, lineHeight: 18 },
+  q: { fontFamily: FONT.sansBold, fontSize: 14.5, color: C.text1, marginBottom: 10 },
+  list: { backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.border, marginBottom: 16 },
+  reason: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 12, paddingHorizontal: 14 },
+  reasonDivider: { borderBottomWidth: 1, borderBottomColor: C.divider },
+  radio: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
+  reasonText: { flex: 1, fontFamily: FONT.sans, fontSize: 14.5, color: C.text1, lineHeight: 20 },
+  notes: { minHeight: 90, padding: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: C.inputBorder, backgroundColor: '#fff', fontFamily: FONT.sans, fontSize: 15, color: C.text1, lineHeight: 21 },
+  counter: { fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.text2, marginTop: 6 },
+  check: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 14, backgroundColor: C.blueSoft, borderWidth: 1.5, borderColor: C.border },
+  box: { width: 24, height: 24, borderRadius: 6, marginTop: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  checkText: { flex: 1, fontFamily: FONT.sans, fontSize: 14, color: C.text1, lineHeight: 20 },
+  actions: { paddingHorizontal: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.screen, gap: 10, backgroundColor: '#fff' },
+  missing: { fontFamily: FONT.sansSemi, fontSize: 13, color: C.text2, textAlign: 'center', lineHeight: 18 },
+  cancel: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.inputBorder, backgroundColor: '#fff' },
+  cancelText: { fontFamily: FONT.sansSemi, fontSize: 15, color: C.text1 },
 });
