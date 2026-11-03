@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
 import { UserRole } from '../entities/user.entity';
 
 export class UpdateUserRoleDto {
@@ -28,4 +28,13 @@ export class AdminUpdateUserDto {
   @IsOptional()
   @IsEnum(UserRole, { message: 'El rol proporcionado no es válido.' })
   role?: UserRole;
+
+  /**
+   * Department the staff account is attached to. `null` (or an empty string)
+   * detaches it, which is the only valid value for a citizen account.
+   */
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null && value !== '')
+  @IsUUID('4', { message: 'El departamento seleccionado no es válido.' })
+  departmentId?: string | null;
 }

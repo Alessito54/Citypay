@@ -7,6 +7,8 @@ import { MunicipalServicesModule } from './services/services.module';
 import { DebtsModule } from './debts/debts.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { HealthModule } from './health/health.module';
 import { AppController } from './app.controller';
@@ -24,6 +26,8 @@ import { AppController } from './app.controller';
     DebtsModule,
     PaymentsModule,
     ReportsModule,
+    DepartmentsModule,
+    AnalyticsModule,
     UploadsModule,
     HealthModule,
   ],

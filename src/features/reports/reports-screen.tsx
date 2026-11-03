@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,19 +7,15 @@ import { AppHeader } from '@/components/app-header';
 import { AdminLogo, HeaderLogo } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icon';
 import { LocationMap } from '@/components/map/location-map';
+import { EstadoBadge } from '@/components/status-badge';
 import { cardShadow, EmptyState, PrimaryButton, SelectField } from '@/components/ui';
 import { C, FONT, TOUCH } from '@/constants/colors';
-import type { Report, ReportEstado } from '@/types';
+import { departmentsService } from '@/services/departments-service';
+import { type Department, isStaffRole, type Report, type ReportEstado } from '@/types';
 
 import { useReports } from './reports-context';
 import { useAuth } from '@/features/auth/auth-context';
-
-const ESTADO_STYLE: Record<ReportEstado, { bg: string; fg: string; dot: string }> = {
-  Nuevo: { bg: C.blueSoft, fg: C.blue, dot: C.blue },
-  'En proceso': { bg: '#FEF3C7', fg: '#92400E', dot: '#B45309' },
-  Asignado: { bg: C.blueChip, fg: C.blueChipText, dot: C.blueChipText },
-  Resuelto: { bg: C.successSoft, fg: C.success, dot: C.success },
-};
+import { ReportStatusSheet } from '@/features/departments/report-status-sheet';
 
 const ESTADOS = ['Todos', 'Nuevo', 'Asignado', 'En proceso', 'Resuelto'];
 const PRIORIDADES = ['Todas', 'Alta', 'Media', 'Baja'];
@@ -28,12 +24,31 @@ export function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const isAdmin = session?.role === 'admin';
-  const { reports } = useReports();
+  const isSupervisor = session?.role === 'municipal_supervisor';
+  const isStaff = isStaffRole(session?.role);
+  const { reports, refreshReports } = useReports();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('Todos');
   const [est, setEst] = useState('Todos');
   const [pri, setPri] = useState('Todas');
   const [detail, setDetail] = useState<Report | null>(null);
+  const [managing, setManaging] = useState<Report | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await departmentsService.list();
+      setDepartments(res.items);
+    } catch {
+      setDepartments([]);
+    }
+  }, []);
+
+  // Only the roles that may re-route an incident need the department list.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isAdmin || isSupervisor) loadDepartments();
+  }, [isAdmin, isSupervisor, loadDepartments]);
 
   const categorias = useMemo(() => ['Todos', ...Array.from(new Set(reports.map((r) => r.categoria)))], [reports]);
 
@@ -73,12 +88,18 @@ export function ReportsScreen() {
             <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 12 }}>
               <View>
                 <Text accessibilityRole="header" style={s.h1}>
-                  {isAdmin ? 'Reportes Municipales' : 'Mis Reportes Ciudadanos'}
+                  {isAdmin
+                    ? 'Reportes Municipales'
+                    : isStaff
+                      ? `Bandeja de ${session?.departamento || 'mi departamento'}`
+                      : 'Mis Reportes Ciudadanos'}
                 </Text>
                 <Text style={s.sub}>
                   {isAdmin
                     ? 'Supervisa y gestiona las incidencias reportadas en toda la ciudad.'
-                    : 'Historial y estatus de atención de tus reportes.'}
+                    : isStaff
+                      ? 'Incidencias turnadas a tu área. Actualiza su atención para informar al ciudadano.'
+                      : 'Historial y estatus de atención de tus reportes.'}
                 </Text>
               </View>
               {/* Primary task first: it used to sit below four filters. */}
@@ -143,30 +164,46 @@ export function ReportsScreen() {
             />
           ) : (
             <EmptyState
-              title={isAdmin ? 'No hay reportes en el sistema' : 'Aún no has generado ningún reporte'}
+              title={
+                isAdmin
+                  ? 'No hay reportes en el sistema'
+                  : isStaff
+                    ? 'Sin reportes turnados a tu área'
+                    : 'Aún no has generado ningún reporte'
+              }
               body={
                 isAdmin
                   ? 'El municipio no tiene reportes ciudadanos registrados en la base de datos.'
-                  : 'Si detectas una fuga de agua, bache, luminaria rota o contenedor desbordado, repórtalo con foto y ubicación para que el municipio lo atienda.'
+                  : isStaff
+                    ? 'Cuando un ciudadano reporte una incidencia de las categorías que atiende tu departamento, aparecerá aquí.'
+                    : 'Si detectas una fuga de agua, bache, luminaria rota o contenedor desbordado, repórtalo con foto y ubicación para que el municipio lo atienda.'
               }
-              actionLabel={!isAdmin ? 'Crear mi primer reporte' : undefined}
-              onAction={!isAdmin ? () => router.push('/new-report') : undefined}
+              actionLabel={!isStaff ? 'Crear mi primer reporte' : undefined}
+              onAction={!isStaff ? () => router.push('/new-report') : undefined}
             />
           )
         }
         renderItem={({ item }) => <ReportCard r={item} onPress={() => setDetail(item)} />}
       />
-      <ReportDetail report={detail} onClose={() => setDetail(null)} />
-    </View>
-  );
-}
-
-function EstadoBadge({ estado }: { estado: ReportEstado }) {
-  const st = ESTADO_STYLE[estado];
-  return (
-    <View style={[s.badge, { backgroundColor: st.bg }]}>
-      <View style={[s.badgeDot, { backgroundColor: st.dot }]} />
-      <Text style={[s.badgeText, { color: st.fg }]}>{estado}</Text>
+      <ReportDetail
+        report={detail}
+        canManage={isStaff}
+        onManage={() => {
+          const target = detail;
+          setDetail(null);
+          setManaging(target);
+        }}
+        onClose={() => setDetail(null)}
+      />
+      <ReportStatusSheet
+        key={managing?.id ?? 'none'}
+        report={managing}
+        visible={!!managing}
+        departments={departments}
+        canReroute={isAdmin || isSupervisor}
+        onClose={() => setManaging(null)}
+        onUpdated={refreshReports}
+      />
     </View>
   );
 }
@@ -197,7 +234,7 @@ function ReportCard({ r, onPress }: { r: Report; onPress: () => void }) {
             {r.date}
             {r.localOnly ? ' · solo en este dispositivo' : ''}
           </Text>
-          <Text style={s.cat}>{r.categoria}</Text>
+          <Text style={s.cat}>{r.departamento || r.categoria}</Text>
         </View>
       </View>
       <Icon name="chevronRight" size={16} color={C.text3} strokeWidth={2.4} />
@@ -206,7 +243,17 @@ function ReportCard({ r, onPress }: { r: Report; onPress: () => void }) {
 }
 
 /** Report detail sheet. Previously tapping a report only showed a "not available" alert. */
-function ReportDetail({ report, onClose }: { report: Report | null; onClose: () => void }) {
+function ReportDetail({
+  report,
+  canManage,
+  onManage,
+  onClose,
+}: {
+  report: Report | null;
+  canManage?: boolean;
+  onManage?: () => void;
+  onClose: () => void;
+}) {
   const insets = useSafeAreaInsets();
   if (!report) return null;
   const steps: ReportEstado[] = ['Nuevo', 'Asignado', 'En proceso', 'Resuelto'];
@@ -214,6 +261,7 @@ function ReportDetail({ report, onClose }: { report: Report | null; onClose: () 
   const rows = [
     { label: 'Categoría', value: report.categoria },
     { label: 'Prioridad', value: report.prioridad },
+    { label: 'Departamento', value: report.departamento || 'Por turnar' },
     { label: 'Ubicación', value: report.address },
     { label: 'Fecha', value: report.date },
   ];
@@ -281,6 +329,15 @@ function ReportDetail({ report, onClose }: { report: Report | null; onClose: () 
             {report.localOnly ? (
               <Text style={s.localNote}>Este reporte se guardó solo en este dispositivo porque no se pudo contactar al servidor municipal.</Text>
             ) : null}
+            {canManage && onManage ? (
+              <PrimaryButton
+                accessibilityLabel="Actualizar la atención de este reporte"
+                accessibilityHint="Cambia el estado de atención y deja una nota en el historial"
+                onPress={onManage}>
+                <Icon name="tool" size={16} color="#fff" />
+                <Text style={s.btnText}>Actualizar atención</Text>
+              </PrimaryButton>
+            ) : null}
             <Pressable accessibilityRole="button" onPress={onClose} style={s.doneBtn}>
               <Text style={s.doneBtnText}>Cerrar</Text>
             </Pressable>
@@ -333,9 +390,6 @@ const s = StyleSheet.create({
   thumb: { width: 60, height: 60, borderRadius: 10, backgroundColor: C.blueIcon, alignItems: 'center', justifyContent: 'center' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 },
   cardTitle: { flex: 1, fontFamily: FONT.sansBold, fontSize: 14.5, color: C.text1 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999 },
-  badgeDot: { width: 6, height: 6, borderRadius: 3 },
-  badgeText: { fontFamily: FONT.sansBold, fontSize: 12 },
   addr: { fontFamily: FONT.sans, fontSize: 13, color: C.text2, marginTop: 2 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 6, flexWrap: 'wrap' },
   date: { flexShrink: 1, fontFamily: FONT.sans, fontSize: 12, color: C.text3 },

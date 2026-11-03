@@ -8,6 +8,7 @@ import { cardShadow } from '@/components/ui';
 import { C, FONT } from '@/constants/colors';
 import { useAuth } from '@/features/auth/auth-context';
 import { TransactionReviewHost } from '@/features/reconciliation/transaction-review';
+import { isStaffRole } from '@/types';
 
 type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -15,23 +16,29 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: 'Inicio', icon: 'home' },
   payments: { label: 'Pagos', icon: 'card' },
   reports: { label: 'Reportes', icon: 'chat' },
+  departments: { label: 'Áreas', icon: 'settings' },
   profile: { label: 'Perfil', icon: 'user' },
 };
 
-function TabBar({ state, navigation }: BottomTabBarProps) {
+/** Departments are a municipal workspace, so the tab is only shown to staff. */
+const STAFF_ONLY = new Set(['departments']);
+
+function TabBar({ state, navigation, staff }: BottomTabBarProps & { staff: boolean }) {
   const insets = useSafeAreaInsets();
+  const visible = state.routes.filter(
+    (route) => TABS[route.name] && (staff || !STAFF_ONLY.has(route.name)),
+  );
   return (
     <View style={[s.bar, { paddingBottom: 8 + insets.bottom }]}>
-      {state.routes.map((route, i) => {
+      {visible.map((route, i) => {
         const cfg = TABS[route.name];
-        if (!cfg) return null;
-        const active = state.index === i;
+        const active = state.routes[state.index]?.key === route.key;
         const color = active ? C.blue : C.text3;
         return (
           <Pressable
             key={route.key}
             accessibilityRole="tab"
-            accessibilityLabel={`${cfg.label}, pestaña ${i + 1} de ${state.routes.length}`}
+            accessibilityLabel={`${cfg.label}, pestaña ${i + 1} de ${visible.length}`}
             accessibilityState={{ selected: active }}
             onPress={() => {
               const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -51,12 +58,14 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
 export default function TabsLayout() {
   const { session } = useAuth();
   if (!session) return <Redirect href="/login" />;
+  const staff = isStaffRole(session.role);
   return (
     <>
-      <Tabs tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false }}>
+      <Tabs tabBar={(p) => <TabBar {...p} staff={staff} />} screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="payments" />
         <Tabs.Screen name="reports" />
+        <Tabs.Screen name="departments" />
         <Tabs.Screen name="profile" />
       </Tabs>
       <TransactionReviewHost />

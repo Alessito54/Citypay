@@ -6,6 +6,8 @@ export interface UserItem {
   displayName: string;
   role: 'admin' | 'citizen' | 'municipal_official' | 'municipal_supervisor';
   phone?: string | null;
+  departmentId?: string | null;
+  departamento?: string | null;
   createdAt: string;
   paymentsCount?: number;
   reportsCount?: number;
@@ -21,7 +23,16 @@ export const usersService = {
     }
   },
 
-  async updateUser(id: string, data: { displayName?: string; phone?: string; role?: string }): Promise<UserItem> {
+  async updateUser(
+    id: string,
+    data: {
+      displayName?: string;
+      phone?: string;
+      role?: string;
+      /** `null` detaches the account from its department. */
+      departmentId?: string | null;
+    },
+  ): Promise<UserItem> {
     return apiClient<UserItem>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),

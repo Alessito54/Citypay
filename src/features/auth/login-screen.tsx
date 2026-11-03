@@ -172,6 +172,26 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
                   👤 Demo Ciudadano
                 </Text>
               </Pressable>
+              <Pressable
+                onPress={() => {
+                  setEmail('funcionario@citypay.gob.mx');
+                  setPassword('demo123');
+                }}
+                style={[s.presetPill, email === 'funcionario@citypay.gob.mx' && s.presetPillActive]}>
+                <Text style={[s.presetText, email === 'funcionario@citypay.gob.mx' && s.presetTextActive]}>
+                  🏛️ Funcionario (Departamento)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setEmail('supervisor@citypay.gob.mx');
+                  setPassword('demo123');
+                }}
+                style={[s.presetPill, email === 'supervisor@citypay.gob.mx' && s.presetPillActive]}>
+                <Text style={[s.presetText, email === 'supervisor@citypay.gob.mx' && s.presetTextActive]}>
+                  🧭 Supervisor Municipal
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -385,7 +405,7 @@ const s = StyleSheet.create({
   soon: { fontFamily: FONT.sans, fontSize: 11.5, color: C.text3 },
   signupRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, marginTop: 14 },
   signup: { fontFamily: FONT.sans, fontSize: 14, color: C.text2 },
-  presetRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 4 },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14, marginBottom: 4 },
   presetPill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: C.blueSoft, borderWidth: 1, borderColor: C.border },
   presetPillActive: { backgroundColor: C.blue, borderColor: C.blue },
   presetText: { fontFamily: FONT.sansSemi, fontSize: 11, color: C.blue },

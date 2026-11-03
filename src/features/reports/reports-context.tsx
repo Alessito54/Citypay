@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { useAuth } from '@/features/auth/auth-context';
 import { reportsService } from '@/services/reports-service';
 import type { NewReportInput, Report } from '@/types';
 
@@ -13,10 +14,19 @@ interface ReportsValue {
 const ReportsContext = createContext<ReportsValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  // Identity of the signed-in account: the backend answers with a different
+  // list for a citizen, an official and the administrator, so the data has to
+  // be fetched again whenever it changes instead of only on mount.
+  const accountKey = session ? `${session.uid ?? session.email}:${session.role ?? ''}` : null;
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refreshReports = useCallback(async () => {
+    if (!accountKey) {
+      setReports([]);
+      return;
+    }
     setLoading(true);
     try {
       const list = await reportsService.list();
@@ -24,9 +34,10 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accountKey]);
 
-  // Mount-time fetch: the provider owns this data, so the request belongs here.
+  // The provider owns this data, so the request belongs here; it re-runs on
+  // sign-in, on sign-out and when the role changes.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshReports();

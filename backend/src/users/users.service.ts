@@ -77,12 +77,44 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async updateUser(id: string, dto: { displayName?: string; phone?: string; role?: UserRole }): Promise<User> {
+  async updateUser(
+    id: string,
+    dto: {
+      displayName?: string;
+      phone?: string;
+      role?: UserRole;
+      departmentId?: string | null;
+    },
+  ): Promise<User> {
     const user = await this.findById(id);
     if (dto.displayName !== undefined) user.displayName = dto.displayName;
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.role !== undefined) user.role = dto.role;
+    if (dto.departmentId !== undefined) {
+      user.departmentId = dto.departmentId || null;
+    }
+    // A citizen account answers for no office, so the attachment is dropped
+    // whenever the role is lowered back to citizen.
+    if (user.role === UserRole.CITIZEN) {
+      user.departmentId = null;
+    }
     return this.usersRepository.save(user);
+  }
+
+  /** Name and slug of the department an account belongs to, if any. */
+  async getDepartmentLabel(
+    departmentId: string | null,
+  ): Promise<{ id: string; name: string; slug: string } | null> {
+    if (!departmentId) return null;
+    try {
+      const rows = await this.usersRepository.query(
+        `SELECT "id", "name", "slug" FROM "departments" WHERE "id" = $1 LIMIT 1`,
+        [departmentId],
+      );
+      return rows[0] || null;
+    } catch {
+      return null;
+    }
   }
 
   async updateRole(id: string, dto: UpdateUserRoleDto): Promise<User> {
@@ -130,12 +162,24 @@ export class UsersService {
       }
     }
 
+    let departmentNames: Record<string, string> = {};
+    try {
+      const depts = await this.usersRepository.query(
+        `SELECT "id", "name" FROM "departments"`,
+      );
+      departmentNames = Object.fromEntries(depts.map((d: any) => [d.id, d.name]));
+    } catch {
+      // The departments table may not exist yet on an un-migrated database.
+    }
+
     const items = users.map((u) => ({
       id: u.id,
       email: u.email,
       displayName: u.displayName,
       role: u.role,
       phone: u.phone,
+      departmentId: u.departmentId,
+      departamento: u.departmentId ? departmentNames[u.departmentId] || null : null,
       createdAt: u.createdAt,
       paymentsCount: paymentCounts[u.id] || 0,
       reportsCount: reportCounts[u.id] || 0,

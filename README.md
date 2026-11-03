@@ -43,6 +43,44 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Departamentos municipales
+
+La administración se organiza en departamentos (`departments`): Tesorería,
+Catastro, Agua Potable, Tránsito, Obras Públicas, Servicios Públicos y
+Contraloría. Cada uno declara:
+
+- `serviceSlugs`: los servicios cuya recaudación le corresponde (`predial`,
+  `agua`, `multas`). Tesorería los tiene todos y está marcada con
+  `isConsolidator`, por lo que los informes agrupados por departamento la
+  omiten y el mismo peso nunca se cuenta dos veces.
+- `reportCategories`: las categorías de reportes ciudadanos que atiende. Son
+  mutuamente excluyentes, así que al crear un reporte el backend lo turna solo
+  al área responsable (`citizen_reports.department_id`).
+- `slaDays`: el plazo comprometido de atención, con el que se calculan los
+  reportes "fuera de plazo".
+
+Las cuentas de funcionario y supervisor se adscriben a un departamento
+(`users.department_id`); las ciudadanas nunca. Un funcionario solo ve y
+actualiza la bandeja de su área; turnar un reporte a otro departamento es
+facultad del supervisor o del administrador.
+
+Pantallas: pestaña **Áreas** (solo personal municipal; el ciudadano llega al
+mismo directorio sin indicadores desde su perfil), panel por departamento en
+`/department/[slug]` y **Centro de Informes** en `/informes` (recaudación,
+conciliación, cartera, desempeño y reportes, con exportación a CSV —
+descarga directa en web, texto seleccionable en la app).
+
+Cuentas sembradas para probar cada rol (atajos en la pantalla de inicio de
+sesión, válidos solo con `NODE_ENV` sin definir):
+
+| Correo | Rol | Departamento |
+| --- | --- | --- |
+| `admin@citypay.gob.mx` | Administrador | — (ve todo) |
+| `supervisor@citypay.gob.mx` | Supervisor | Obras Públicas |
+| `funcionario@citypay.gob.mx` | Funcionario | Servicios Públicos |
+| `tesoreria@citypay.gob.mx` | Funcionario | Tesorería |
+| `demo@citypay.gob.mx` | Ciudadano | — |
+
 ## Deploy the backend to Render
 
 [`render.yaml`](render.yaml) is a Blueprint: **New > Blueprint** in the Render

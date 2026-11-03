@@ -7,6 +7,7 @@ import { ReportStatusHistory } from './entities/report-status-history.entity';
 import { CreateReportDto, ReportImageDto } from './dto/create-report.dto';
 import { UpdateReportStatusDto } from './dto/update-report-status.dto';
 import { User } from '../users/entities/user.entity';
+import { DepartmentsService } from '../departments/departments.service';
 
 const ICONS: Record<string, string> = {
   'Alumbrado público': '💡',
@@ -22,6 +23,7 @@ export class ReportsService {
     @InjectRepository(CitizenReport)
     private readonly reportRepository: Repository<CitizenReport>,
     private readonly dataSource: DataSource,
+    private readonly departmentsService: DepartmentsService,
   ) {}
 
   async findAll(options?: {
@@ -30,14 +32,22 @@ export class ReportsService {
     priority?: ReportPriority;
     search?: string;
     userId?: string;
+    departmentId?: string;
   }): Promise<CitizenReport[]> {
     const query = this.reportRepository
       .createQueryBuilder('report')
       .leftJoinAndSelect('report.images', 'images')
-      .leftJoinAndSelect('report.user', 'user');
+      .leftJoinAndSelect('report.user', 'user')
+      .leftJoinAndSelect('report.department', 'department');
 
     if (options?.userId) {
       query.andWhere('report.user_id = :userId', { userId: options.userId });
+    }
+
+    if (options?.departmentId) {
+      query.andWhere('report.department_id = :departmentId', {
+        departmentId: options.departmentId,
+      });
     }
 
     if (options?.category && options.category !== 'Todos') {
@@ -74,6 +84,7 @@ export class ReportsService {
         },
         user: true,
         assignedTo: true,
+        department: true,
       },
       order: {
         history: {
@@ -100,6 +111,10 @@ export class ReportsService {
 
     const icon = ICONS[dto.category] || '📋';
 
+    // Route the incident to the office that answers for this category, so it
+    // lands in that department's queue without manual triage.
+    const department = await this.departmentsService.findByReportCategory(dto.category);
+
     // Use SQL Transaction for saving report, images, and history atomically
     return this.dataSource.transaction(async (manager) => {
       const report = manager.create(CitizenReport, {
@@ -114,6 +129,7 @@ export class ReportsService {
         latitude: dto.latitude || null,
         longitude: dto.longitude || null,
         userId: user.id,
+        departmentId: department?.id || null,
       });
 
       const savedReport = await manager.save(CitizenReport, report);
@@ -124,7 +140,9 @@ export class ReportsService {
         changedById: user.id,
         previousStatus: 'Creado',
         newStatus: ReportStatus.NUEVO,
-        notes: 'Reporte registrado por el ciudadano.',
+        notes: department
+          ? `Reporte registrado por el ciudadano y turnado a ${department.name}.`
+          : 'Reporte registrado por el ciudadano.',
       });
 
       // Save images if any
@@ -165,14 +183,21 @@ export class ReportsService {
   ): Promise<CitizenReport> {
     const report = await this.findById(id);
 
-    return this.dataSource.transaction(async (manager) => {
+    await this.dataSource.transaction(async (manager) => {
       const previousStatus = report.status;
       report.status = dto.status;
       if (dto.assignedToId) {
         report.assignedToId = dto.assignedToId;
+        // The eagerly loaded relation object wins over the id column on save,
+        // so it is dropped and left to be re-read from the database.
+        report.assignedTo = null;
+      }
+      if (dto.departmentId) {
+        report.departmentId = dto.departmentId;
+        report.department = null;
       }
 
-      const updated = await manager.save(CitizenReport, report);
+      await manager.save(CitizenReport, report);
 
       await manager.save(ReportStatusHistory, {
         reportId: report.id,
@@ -181,8 +206,9 @@ export class ReportsService {
         newStatus: dto.status,
         notes: dto.notes || `Estado actualizado a ${dto.status}.`,
       });
-
-      return updated;
     });
+
+    // Re-read so the caller gets the new department and assignee by name.
+    return this.findById(id);
   }
 }

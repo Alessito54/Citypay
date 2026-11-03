@@ -7,12 +7,14 @@ import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
+import { DepartmentsModule } from '../departments/departments.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CitizenReport, ReportImage, ReportStatusHistory]),
     AuthModule,
     UsersModule,
+    DepartmentsModule,
   ],
   providers: [ReportsService],
   controllers: [ReportsController],

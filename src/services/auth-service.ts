@@ -11,6 +11,38 @@ import { getFirebaseAuth } from '@/config/firebase';
 import { apiClient, setActiveAuthToken } from './api-client';
 import type { Session } from '@/types';
 
+interface BackendProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  departmentId?: string | null;
+  departamento?: string | null;
+  departamentoSlug?: string | null;
+}
+
+/**
+ * Dev shortcut accounts. They let each municipal role be exercised without a
+ * Firebase password; the backend only honours these tokens outside production.
+ */
+const DEV_ACCOUNTS: Record<string, { token: string; fallbackName: string }> = {
+  'admin@citypay.gob.mx': { token: 'dev_admin_token', fallbackName: 'Administrador Municipal' },
+  'demo@citypay.gob.mx': { token: 'dev_demo_token', fallbackName: 'Carlos Ramírez Vega' },
+  'ciudadano@citypay.gob.mx': { token: 'dev_demo_token', fallbackName: 'Carlos Ramírez Vega' },
+  'funcionario@citypay.gob.mx': {
+    token: 'dev_official_token',
+    fallbackName: 'Luis Ángel Cordero Fuentes',
+  },
+  'supervisor@citypay.gob.mx': {
+    token: 'dev_supervisor_token',
+    fallbackName: 'Patricia Núñez Rangel',
+  },
+  'tesoreria@citypay.gob.mx': {
+    token: 'dev_treasury_token',
+    fallbackName: 'Ricardo Salinas Mejía',
+  },
+};
+
 export const authService = {
   isDemo: false,
 
@@ -28,12 +60,7 @@ export const authService = {
 
         try {
           // Fetch authenticated profile from backend to get server-verified role
-          const profile = await apiClient<{
-            id: string;
-            email: string;
-            displayName: string;
-            role: string;
-          }>('/users/me');
+          const profile = await apiClient<BackendProfile>('/users/me');
 
           callback({
             email: profile.email || user.email || '',
@@ -41,6 +68,9 @@ export const authService = {
             role: profile.role || 'citizen',
             uid: user.uid,
             demo: false,
+            departmentId: profile.departmentId ?? null,
+            departamento: profile.departamento ?? null,
+            departamentoSlug: profile.departamentoSlug ?? null,
           });
         } catch {
           // If backend is temporarily unreachable, provide local session info
@@ -72,28 +102,22 @@ export const authService = {
     }
 
     const mailLower = mail.toLowerCase();
-    const isSpecialDevAccount =
-      mailLower === 'admin@citypay.gob.mx' ||
-      mailLower === 'demo@citypay.gob.mx' ||
-      mailLower === 'ciudadano@citypay.gob.mx';
+    const devAccount = DEV_ACCOUNTS[mailLower];
 
-    if (isSpecialDevAccount) {
-      const devToken = mailLower === 'admin@citypay.gob.mx' ? 'dev_admin_token' : 'dev_demo_token';
-      setActiveAuthToken(devToken);
+    if (devAccount) {
+      setActiveAuthToken(devAccount.token);
       try {
-        const profile = await apiClient<{
-          id: string;
-          email: string;
-          displayName: string;
-          role: string;
-        }>('/users/me');
+        const profile = await apiClient<BackendProfile>('/users/me');
 
         return {
           email: profile.email || mail,
-          displayName: profile.displayName || (mailLower.includes('admin') ? 'Administrador Municipal' : 'Carlos Ramírez Vega'),
+          displayName: profile.displayName || devAccount.fallbackName,
           role: profile.role,
-          uid: devToken,
+          uid: devAccount.token,
           demo: false,
+          departmentId: profile.departmentId ?? null,
+          departamento: profile.departamento ?? null,
+          departamentoSlug: profile.departamentoSlug ?? null,
         };
       } catch {
         setActiveAuthToken(null);
@@ -106,12 +130,7 @@ export const authService = {
       setActiveAuthToken(null);
 
       // Verify and sync with backend
-      const profile = await apiClient<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: string;
-      }>('/users/me');
+      const profile = await apiClient<BackendProfile>('/users/me');
 
       return {
         email: profile.email || cred.user.email || mail,
@@ -119,6 +138,9 @@ export const authService = {
         role: profile.role,
         uid: cred.user.uid,
         demo: false,
+        departmentId: profile.departmentId ?? null,
+        departamento: profile.departamento ?? null,
+        departamentoSlug: profile.departamentoSlug ?? null,
       };
     } catch (err: any) {
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
@@ -158,12 +180,7 @@ export const authService = {
       }
 
       // Sync user with backend
-      const profile = await apiClient<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: string;
-      }>('/users/me');
+      const profile = await apiClient<BackendProfile>('/users/me');
 
       return {
         email: profile.email || mail,
@@ -171,6 +188,9 @@ export const authService = {
         role: profile.role,
         uid: cred.user.uid,
         demo: false,
+        departmentId: profile.departmentId ?? null,
+        departamento: profile.departamento ?? null,
+        departamentoSlug: profile.departamentoSlug ?? null,
       };
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {

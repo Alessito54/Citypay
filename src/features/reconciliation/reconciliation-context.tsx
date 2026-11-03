@@ -26,19 +26,26 @@ const Ctx = createContext<ReconciliationValue | null>(null);
 export function ReconciliationProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const isAdmin = session?.role === 'admin';
+  // See ReportsProvider: the list depends on who is signed in, so the fetch is
+  // keyed on the account and not only on the role.
+  const accountKey = session ? `${session.uid ?? session.email}:${session.role ?? ''}` : null;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [resolvedIds, setResolvedIds] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [phase, setPhase] = useState<Phase>('closed');
 
   const refreshTransactions = useCallback(async () => {
+    if (!accountKey) {
+      setTransactions([]);
+      return;
+    }
     try {
       const list = await reconciliationService.listTransactions(isAdmin);
       setTransactions(list);
     } catch {
       // Keep existing transactions
     }
-  }, [isAdmin]);
+  }, [isAdmin, accountKey]);
 
   // Mount-time fetch: the provider owns this data, so the request belongs here.
   useEffect(() => {

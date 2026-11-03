@@ -12,7 +12,10 @@ import { C, FONT, TOUCH } from '@/constants/colors';
 import { useAuth } from '@/features/auth/auth-context';
 import { useReports } from '@/features/reports/reports-context';
 import { type DebtItem, debtsService } from '@/services/debts-service';
+import { departmentsService } from '@/services/departments-service';
 import { type UserItem, usersService } from '@/services/users-service';
+import { StaffHomeScreen } from '@/features/departments/staff-home-screen';
+import type { Department } from '@/types';
 
 import { fmtMoney } from './format';
 import { useReconciliation } from './reconciliation-context';
@@ -23,7 +26,14 @@ type QuickAction = { icon: IconName; label: string; hint: string; action: () => 
 
 export function HomeScreen() {
   const { session } = useAuth();
-  return session?.role === 'admin' ? <AdminHomeScreen /> : <CitizenHomeScreen />;
+  // Three different jobs, three different home screens: the administrator sees
+  // the whole municipality, departmental staff see their own office, and a
+  // citizen sees their own trámites.
+  if (session?.role === 'admin') return <AdminHomeScreen />;
+  if (session?.role === 'municipal_official' || session?.role === 'municipal_supervisor') {
+    return <StaffHomeScreen />;
+  }
+  return <CitizenHomeScreen />;
 }
 
 /* =========================================================================
@@ -36,6 +46,7 @@ function AdminHomeScreen() {
   const { reports, refreshReports } = useReports();
 
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
   const [userModalVisible, setUserModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,17 +56,27 @@ function AdminHomeScreen() {
     setUsers(res.items);
   }, []);
 
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await departmentsService.list();
+      setDepartments(res.items);
+    } catch {
+      setDepartments([]);
+    }
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refreshTransactions(), refreshReports(), loadUsers()]);
+    await Promise.all([refreshTransactions(), refreshReports(), loadUsers(), loadDepartments()]);
     setRefreshing(false);
-  }, [refreshTransactions, refreshReports, loadUsers]);
+  }, [refreshTransactions, refreshReports, loadUsers, loadDepartments]);
 
   // Mount-time fetch: this screen owns the data, so the request belongs here.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUsers();
-  }, [loadUsers]);
+    loadDepartments();
+  }, [loadUsers, loadDepartments]);
 
   const effective = transactions.map((t) =>
     resolvedIds.has(t.id) ? { ...t, estado: 'conciliado' as const, montoBanco: t.montoSistema } : t,
@@ -72,6 +93,19 @@ function AdminHomeScreen() {
   const goPayments = (filtro?: string) =>
     router.navigate(filtro ? { pathname: '/payments', params: { filtro } } : '/payments');
 
+  const reportesVencidos = departments.reduce((a, d) => a + (d.metrics?.reportesVencidos ?? 0), 0);
+  const reportesAbiertos = departments.reduce(
+    (a, d) =>
+      a +
+      (d.metrics?.reportesNuevos ?? 0) +
+      (d.metrics?.reportesAsignados ?? 0) +
+      (d.metrics?.reportesProceso ?? 0),
+    0,
+  );
+  const carteraTotal = departments
+    .filter((d) => !d.isConsolidator)
+    .reduce((a, d) => a + (d.metrics?.carteraPendiente ?? 0) + (d.metrics?.carteraVencida ?? 0), 0);
+
   // Only actions that work today. The original grid had five shortcuts and four of
   // them opened a "not available" alert, which users read as an error.
   const QUICK: QuickAction[] = [
@@ -82,9 +116,17 @@ function AdminHomeScreen() {
       badge: abiertas.length,
       action: () => (abiertas[0] ? open(abiertas[0]) : goPayments('discrepancia')),
     },
+    {
+      icon: 'settings',
+      label: 'Departa-\nmentos',
+      hint: 'Abre el panel de las áreas municipales',
+      badge: reportesVencidos,
+      action: () => router.navigate('/departments'),
+    },
+    { icon: 'chart', label: 'Centro de\ninformes', hint: 'Genera informes de recaudación, cartera y desempeño', action: () => router.push('/informes') },
     { icon: 'card', label: 'Buscar\npago', hint: 'Abre la lista de pagos con buscador', action: () => goPayments() },
-    { icon: 'doc', label: 'Nuevo\nreporte', hint: 'Abre el formulario de reporte ciudadano', action: () => router.push('/new-report') },
     { icon: 'chat', label: 'Ver\nreportes', hint: 'Abre la lista de reportes', action: () => router.navigate('/reports') },
+    { icon: 'doc', label: 'Nuevo\nreporte', hint: 'Abre el formulario de reporte ciudadano', action: () => router.push('/new-report') },
   ];
 
   // Counts come from the loaded records; no fabricated "last activity" timestamps.
@@ -93,6 +135,7 @@ function AdminHomeScreen() {
     { icon: 'warn', label: 'Diferencias por revisar', sub: 'Pagos cuyo monto no coincide con el banco', count: abiertas.length, action: () => goPayments('discrepancia') },
     { icon: 'clock', label: 'Pendientes de banco', sub: 'Pagos aún no acreditados', count: pendientes, action: () => goPayments('pendiente') },
     { icon: 'chat', label: 'Reportes ciudadanos', sub: 'Incidencias levantadas por la ciudadanía', count: reports.length, action: () => router.navigate('/reports') },
+    { icon: 'settings', label: 'Departamentos activos', sub: 'Áreas que administran impuestos y servicios', count: departments.length, action: () => router.navigate('/departments') },
   ];
 
   return (
@@ -170,6 +213,60 @@ function AdminHomeScreen() {
               <KpiCard icon="warn" label="Descuadre Banco" value={fmtMoney(descuadre)} sub="En discrepancia" />
               <KpiCard icon="user" label="Cuentas Registradas" value={`${users.length}`} sub="Usuarios en DB" />
             </View>
+            <View style={s.pair}>
+              <KpiCard icon="doc" label="Cartera por Cobrar" value={fmtMoney(carteraTotal)} sub="Adeudos de los departamentos" />
+              <KpiCard icon="chat" label="Reportes Abiertos" value={`${reportesAbiertos}`} sub={`${reportesVencidos} fuera de plazo`} />
+            </View>
+          </View>
+        </Section>
+
+        <Section
+          label={`Departamentos Municipales (${departments.length})`}
+          link="Ver todos"
+          linkHint="Abre el panel completo de departamentos"
+          onLinkPress={() => router.navigate('/departments')}>
+          <View style={s.card}>
+            {departments.length === 0 ? (
+              <Text style={s.emptyList}>No hay departamentos registrados aún.</Text>
+            ) : (
+              departments.map((d, i) => {
+                const m = d.metrics;
+                const openReports = m ? m.reportesNuevos + m.reportesAsignados + m.reportesProceso : 0;
+                return (
+                  <Pressable
+                    key={d.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${d.name}. ${fmtMoney(m?.recaudado ?? 0)} conciliados. ${openReports} reportes abiertos. ${m?.equipo ?? 0} ${(m?.equipo ?? 0) === 1 ? 'persona adscrita' : 'personas adscritas'}.`}
+                    accessibilityHint="Abre el panel del departamento"
+                    onPress={() => router.push(`/department/${d.slug}`)}
+                    style={({ pressed }) => [s.deptRow, i < departments.length - 1 && s.rowBorder, pressed && { backgroundColor: C.blueSoft }]}>
+                    <View style={s.deptIcon}>
+                      <Text style={{ fontSize: 20 }}>{d.icon}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={s.deptName}>{d.name}</Text>
+                      <Text numberOfLines={1} style={s.deptMeta}>
+                        {fmtMoney(m?.recaudado ?? 0)} conciliados · {m?.equipo ?? 0}{' '}
+                        {(m?.equipo ?? 0) === 1 ? 'persona' : 'personas'}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[s.deptCount, openReports > 0 && { color: C.blue }]}>{openReports}</Text>
+                      <Text style={s.deptCountLabel}>abiertos</Text>
+                    </View>
+                    <Icon name="chevronRight" size={16} color={C.text3} strokeWidth={2.4} />
+                  </Pressable>
+                );
+              })
+            )}
+            {reportesVencidos > 0 ? (
+              <View style={s.deptWarn} accessible accessibilityLabel={`${reportesVencidos} reportes fuera del plazo comprometido por los departamentos.`}>
+                <Icon name="warn" size={14} color={C.danger} strokeWidth={2.2} />
+                <Text style={s.deptWarnText}>
+                  {reportesVencidos} reporte{reportesVencidos !== 1 ? 's' : ''} fuera del plazo comprometido
+                </Text>
+              </View>
+            ) : null}
           </View>
         </Section>
 
@@ -477,8 +574,8 @@ const s = StyleSheet.create({
   alertSub: { fontFamily: FONT.sans, fontSize: 12.5, color: '#7F1D1D', marginTop: 1 },
   alertCta: { fontFamily: FONT.sansBold, fontSize: 14, color: C.danger },
   pair: { flexDirection: 'row', gap: 10 },
-  quick: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
-  quickItem: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 6, borderRadius: 12, minHeight: TOUCH },
+  quick: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  quickItem: { width: '31%', flexGrow: 1, alignItems: 'center', gap: 6, paddingVertical: 8, borderRadius: 12, minHeight: TOUCH },
   quickIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: C.blueIcon, alignItems: 'center', justifyContent: 'center' },
   quickBadge: { position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, paddingHorizontal: 4, borderRadius: 10, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg },
   quickBadgeText: { fontFamily: FONT.sansBold, fontSize: 11, color: '#fff' },
@@ -495,6 +592,16 @@ const s = StyleSheet.create({
   actLabel: { fontFamily: FONT.sansBold, fontSize: 14.5, color: C.text1 },
   actSub: { fontFamily: FONT.sans, fontSize: 12.5, color: C.text3, marginTop: 2 },
   actCount: { fontFamily: FONT.displayBold, fontSize: 15, color: C.text1, marginRight: 4 },
+
+  // Departments
+  deptRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, minHeight: 68 },
+  deptIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.blueIcon, alignItems: 'center', justifyContent: 'center' },
+  deptName: { fontFamily: FONT.sansBold, fontSize: 14, color: C.text1 },
+  deptMeta: { fontFamily: FONT.sans, fontSize: 12, color: C.text3, marginTop: 2 },
+  deptCount: { fontFamily: FONT.displayBold, fontSize: 16, color: C.text1 },
+  deptCountLabel: { fontFamily: FONT.sans, fontSize: 11, color: C.text3 },
+  deptWarn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: C.dangerSoft, borderTopWidth: 1, borderTopColor: '#FECACA' },
+  deptWarnText: { flex: 1, fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.danger },
 
   // User management
   userRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, minHeight: TOUCH + 16 },

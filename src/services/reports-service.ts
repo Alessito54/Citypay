@@ -1,4 +1,4 @@
-import type { NewReportInput, Report } from '@/types';
+import type { NewReportInput, Report, ReportEstado } from '@/types';
 import { apiClient } from './api-client';
 
 const ICONS: Record<string, string> = {
@@ -56,13 +56,32 @@ async function uploadPhotoToCloudinary(uri: string): Promise<string> {
 export const reportsService = {
   isDemo: false,
 
-  async list(): Promise<Report[]> {
+  async list(filters?: { departmentId?: string; status?: ReportEstado; q?: string }): Promise<Report[]> {
+    const params = new URLSearchParams();
+    if (filters?.departmentId) params.set('departmentId', filters.departmentId);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.q?.trim()) params.set('q', filters.q.trim());
+    const query = params.toString();
     try {
-      const reports = await apiClient<Report[]>('/reports');
+      const reports = await apiClient<Report[]>(`/reports${query ? `?${query}` : ''}`);
       return Array.isArray(reports) ? reports : [];
     } catch {
       return [];
     }
+  },
+
+  /**
+   * Moves a report along its workflow. Only municipal staff may call it; the
+   * backend records who made the change and keeps the history.
+   */
+  async updateStatus(
+    id: string,
+    data: { status: ReportEstado; notes?: string; departmentId?: string; assignedToId?: string },
+  ): Promise<Report> {
+    return apiClient<Report>(`/reports/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   },
 
   async submit(input: NewReportInput): Promise<Report> {

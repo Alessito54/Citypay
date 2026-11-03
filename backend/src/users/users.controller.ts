@@ -23,13 +23,17 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  getMe(@CurrentUser() user: User) {
+  async getMe(@CurrentUser() user: User) {
+    const department = await this.usersService.getDepartmentLabel(user.departmentId);
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
       role: user.role,
       phone: user.phone,
+      departmentId: user.departmentId,
+      departamento: department?.name || null,
+      departamentoSlug: department?.slug || null,
       createdAt: user.createdAt,
     };
   }

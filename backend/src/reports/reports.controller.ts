@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  ForbiddenException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ReportsService } from './reports.service';
@@ -18,11 +19,15 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
+import { DepartmentsService } from '../departments/departments.service';
 
 @Controller('reports')
 @UseGuards(FirebaseAuthGuard, RolesGuard)
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly departmentsService: DepartmentsService,
+  ) {}
 
   @Get()
   async findAll(
@@ -32,6 +37,7 @@ export class ReportsController {
     @Query('q') q?: string,
     @Query('mine') mine?: string,
     @Query('userId') queryUserId?: string,
+    @Query('departmentId') queryDepartmentId?: string,
     @CurrentUser() user?: User,
   ) {
     const isStaff =
@@ -47,12 +53,20 @@ export class ReportsController {
         : queryUserId || undefined
       : user?.id;
 
+    // A municipal official only works the queue of their own office; the admin
+    // and supervisors may narrow it down with the query parameter.
+    const departmentId =
+      user?.role === UserRole.MUNICIPAL_OFFICIAL
+        ? user.departmentId || undefined
+        : queryDepartmentId || undefined;
+
     const reports = await this.reportsService.findAll({
       category,
       status,
       priority,
       search: q,
       userId: targetUserId,
+      departmentId: isStaff ? departmentId : undefined,
     });
     return reports.map(this.mapToDto);
   }
@@ -79,8 +93,40 @@ export class ReportsController {
     @CurrentUser() user: User,
     @Body() dto: UpdateReportStatusDto,
   ) {
+    if (user.role === UserRole.MUNICIPAL_OFFICIAL) {
+      await this.assertOwnDepartment(id, user);
+      if (dto.departmentId && dto.departmentId !== user.departmentId) {
+        throw new ForbiddenException(
+          'Turnar un reporte a otro departamento corresponde a un supervisor o al administrador.',
+        );
+      }
+    }
+
     const updated = await this.reportsService.updateStatus(id, dto, user);
     return this.mapToDto(updated);
+  }
+
+  /**
+   * An official may only work the queue of their own office. A report with no
+   * department yet counts as theirs when its category is one they attend.
+   */
+  private async assertOwnDepartment(reportId: string, user: User) {
+    if (!user.departmentId) {
+      throw new ForbiddenException(
+        'Tu cuenta no está adscrita a un departamento, así que no puede atender reportes.',
+      );
+    }
+
+    const report = await this.reportsService.findById(reportId);
+    if (report.departmentId === user.departmentId) return;
+
+    if (report.departmentId === null) {
+      const own = await this.departmentsService.findById(user.departmentId);
+      const categories = (own.reportCategories || []).map((c) => c.trim().toLowerCase());
+      if (categories.includes(String(report.category || '').trim().toLowerCase())) return;
+    }
+
+    throw new ForbiddenException('Este reporte está turnado a otro departamento.');
   }
 
   private mapToDto(r: CitizenReport) {
@@ -95,6 +141,9 @@ export class ReportsController {
       icon: r.icon,
       description: r.description,
       fotos: r.images?.map((i) => i.secureUrl) || [],
+      departmentId: r.departmentId,
+      departamento: r.department?.name || null,
+      departamentoSlug: r.department?.slug || null,
       localOnly: false,
       createdAt: r.createdAt,
     };

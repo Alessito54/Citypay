@@ -8,7 +8,9 @@ import { Payment } from '../payments/entities/payment.entity';
 import { CitizenReport } from '../reports/entities/report.entity';
 import { ReportImage } from '../reports/entities/report-image.entity';
 import { ReportStatusHistory } from '../reports/entities/report-status-history.entity';
+import { Department } from '../departments/entities/department.entity';
 import { InitialSchema1729000000000 } from './migrations/1729000000000-InitialSchema';
+import { Departments1763000000000 } from './migrations/1763000000000-Departments';
 import { DatabaseSeederService } from './database-seeder.service';
 
 @Module({
@@ -23,8 +25,8 @@ import { DatabaseSeederService } from './database-seeder.service';
           type: 'postgres',
           url: dbUrl,
           ssl: useSsl ? { rejectUnauthorized: false } : false,
-          entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory],
-          migrations: [InitialSchema1729000000000],
+          entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory, Department],
+          migrations: [InitialSchema1729000000000, Departments1763000000000],
           migrationsRun: false, // controlled explicitly in seeder
           synchronize: false,
           logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
@@ -39,6 +41,7 @@ import { DatabaseSeederService } from './database-seeder.service';
       CitizenReport,
       ReportImage,
       ReportStatusHistory,
+      Department,
     ]),
   ],
   providers: [DatabaseSeederService],
