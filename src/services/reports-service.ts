@@ -1,132 +1,48 @@
-import type { NewReportInput, Report, ReportEstado } from '@/types';
-import { apiClient } from './api-client';
+import { isDemoId, type Loaded } from '@/lib/data-source';
+import type { NewReportInput, Report } from '@/types';
 
-const ICONS: Record<string, string> = {
-  'Alumbrado público': '💡',
-  Vialidad: '🚧',
-  Agua: '💧',
-  'Limpieza y residuos': '🗑️',
-  'Parques y jardines': '🛝',
-};
-
-/**
- * Uploads a local photo to Cloudinary using either the backend upload endpoint
- * or direct unsigned/signed Cloudinary upload
- */
-async function uploadPhotoToCloudinary(uri: string): Promise<string> {
-  if (uri.startsWith('http://') || uri.startsWith('https://')) {
-    return uri;
-  }
-
-  // Cloudinary upload: send multipart to backend /uploads
-  // or fetch blob and convert to base64
-  try {
-    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'zqu7gzrq';
-    const preset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'citypay_reports';
-
-    const formData = new FormData();
-    const filename = uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    formData.append('file', {
-      uri,
-      name: filename,
-      type,
-    } as any);
-    formData.append('upload_preset', preset);
-    formData.append('folder', 'citypay/reports');
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return data.secure_url;
-    }
-  } catch {
-    // If client direct upload fails, fallback to passing local uri or placeholder
-  }
-
-  return uri;
-}
+import { ApiError, apiClient } from './api-client';
+import { DEMO_REPORTS } from './demo-data';
+import { uploadPhoto } from './uploads-service';
 
 export const reportsService = {
-  isDemo: false,
-
-  async list(filters?: { departmentId?: string; status?: ReportEstado; q?: string }): Promise<Report[]> {
-    const params = new URLSearchParams();
-    if (filters?.departmentId) params.set('departmentId', filters.departmentId);
-    if (filters?.status) params.set('status', filters.status);
-    if (filters?.q?.trim()) params.set('q', filters.q.trim());
-    const query = params.toString();
+  /** Reports from the API. Falls back to demo data only when the API cannot be reached. */
+  async list(): Promise<Loaded<Report[]>> {
     try {
-      const reports = await apiClient<Report[]>(`/reports${query ? `?${query}` : ''}`);
-      return Array.isArray(reports) ? reports : [];
-    } catch {
-      return [];
+      return { items: await apiClient<Report[]>('/reports'), source: 'api' };
+    } catch (err) {
+      return { items: DEMO_REPORTS, source: 'demo', reason: err instanceof Error ? err.message : undefined };
     }
   },
 
-  /**
-   * Moves a report along its workflow. Only municipal staff may call it; the
-   * backend records who made the change and keeps the history.
-   */
-  async updateStatus(
-    id: string,
-    data: { status: ReportEstado; notes?: string; departmentId?: string; assignedToId?: string },
-  ): Promise<Report> {
-    return apiClient<Report>(`/reports/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+  /** Full record (coordinates, photos, description) for the detail sheet. */
+  async get(id: string): Promise<Report | null> {
+    if (isDemoId(id)) return null;
+    return apiClient<Report>(`/reports/${id}`);
   },
 
+  /** Creates the report. Errors reach the form: a failed send is never shown as "sent". */
   async submit(input: NewReportInput): Promise<Report> {
-    // Upload photos if any
-    const uploadedUrls: string[] = [];
-    if (input.fotos && input.fotos.length > 0) {
-      for (const photoUri of input.fotos) {
-        const url = await uploadPhotoToCloudinary(photoUri);
-        uploadedUrls.push(url);
-      }
-    }
-
+    const images = await Promise.all(input.fotos.map(uploadPhoto));
     try {
-      const created = await apiClient<Report>('/reports', {
+      return await apiClient<Report>('/reports', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           title: input.problema,
           category: input.categoria,
-          priority: input.prioridad === 'Bajo' ? 'Baja' : input.prioridad,
+          priority: input.prioridad,
           address: input.direccion,
           description: input.descripcion,
-          images: uploadedUrls,
+          images,
           latitude: input.latitude,
           longitude: input.longitude,
-        }),
+        },
       });
-
-      return created;
-    } catch {
-      // If backend request fails, return local record with error explanation
-      return {
-        id: `local-${Date.now()}`,
-        title: input.problema,
-        address: input.direccion,
-        date: new Date()
-          .toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-          .replace(/\./g, ''),
-        estado: 'Nuevo',
-        categoria: input.categoria,
-        prioridad: input.prioridad === 'Bajo' ? 'Baja' : (input.prioridad as any),
-        icon: ICONS[input.categoria] ?? '📋',
-        localOnly: true,
-        latitude: input.latitude,
-        longitude: input.longitude,
-      };
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 0) {
+        throw new Error('No se pudo enviar el reporte: no hay conexión con el servidor. Inténtalo de nuevo.');
+      }
+      throw err;
     }
   },
 };

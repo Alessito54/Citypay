@@ -1,15 +1,20 @@
 import { AccessibilityInfo } from 'react-native';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
+import type { DataSource, Loaded } from '@/lib/data-source';
+import { useSessionData } from '@/lib/use-session-data';
 import { reconciliationService } from '@/services/reconciliation-service';
-import { useAuth } from '@/features/auth/auth-context';
 import type { Transaction } from '@/types';
+
+import { useAuth } from '../auth/auth-context';
 
 type Phase = 'closed' | 'detail' | 'force';
 
 interface ReconciliationValue {
   transactions: Transaction[];
-  /** ids marked as manually reconciled on this device or backend. */
+  source: DataSource;
+  loading: boolean;
+  /** ids reconciled manually during this session (to show the confirmation). */
   resolvedIds: ReadonlySet<string>;
   selected: Transaction | null;
   phase: Phase;
@@ -22,45 +27,29 @@ interface ReconciliationValue {
 }
 
 const Ctx = createContext<ReconciliationValue | null>(null);
+const EMPTY: Transaction[] = [];
+const NONE = async (): Promise<Loaded<Transaction[]>> => ({ items: EMPTY, source: 'api' });
 
 export function ReconciliationProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
-  const isAdmin = session?.role === 'admin';
-  // See ReportsProvider: the list depends on who is signed in, so the fetch is
-  // keyed on the account and not only on the role.
-  const accountKey = session ? `${session.uid ?? session.email}:${session.role ?? ''}` : null;
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const { session, staff } = useAuth();
+  // Citizens never request /payments (the API answers 403 and demo payments appeared instead).
+  const data = useSessionData(session?.uid ?? null, staff ? reconciliationService.listTransactions : NONE, EMPTY);
+  const { update } = data;
   const [resolvedIds, setResolvedIds] = useState<ReadonlySet<string>>(new Set());
-  const [selected, setSelected] = useState<Transaction | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('closed');
 
-  const refreshTransactions = useCallback(async () => {
-    if (!accountKey) {
-      setTransactions([]);
-      return;
-    }
-    try {
-      const list = await reconciliationService.listTransactions(isAdmin);
-      setTransactions(list);
-    } catch {
-      // Keep existing transactions
-    }
-  }, [isAdmin, accountKey]);
-
-  // Mount-time fetch: the provider owns this data, so the request belongs here.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshTransactions();
-  }, [refreshTransactions]);
+  // Derived from the list, so the sheet always shows the latest state of the payment.
+  const selected = useMemo(() => data.items.find((t) => t.id === selectedId) ?? null, [data.items, selectedId]);
 
   const open = useCallback((tx: Transaction) => {
-    setSelected(tx);
+    setSelectedId(tx.id);
     setPhase('detail');
   }, []);
 
   const close = useCallback(() => {
     setPhase('closed');
-    setSelected(null);
+    setSelectedId(null);
   }, []);
 
   const startForce = useCallback(() => setPhase('force'), []);
@@ -69,35 +58,33 @@ export function ReconciliationProvider({ children }: { children: ReactNode }) {
   const confirmForce = useCallback(
     async (reason: string, notes: string) => {
       if (!selected) return;
-      await reconciliationService.forceReconcile({ transactionId: selected.id, reason, notes });
-      setResolvedIds((prev) => new Set(prev).add(selected.id));
-      setTransactions((prev) =>
-        prev.map((t) =>
-          t.id === selected.id ? { ...t, estado: 'conciliado', montoBanco: t.montoSistema } : t,
-        ),
-      );
-      // Return to the detail sheet so the user sees the "conciliado" confirmation
-      // instead of the sheet silently disappearing.
+      const saved = await reconciliationService.forceReconcile({ transactionId: selected.id, reason, notes });
+      const next: Transaction = saved ?? { ...selected, estado: 'conciliado', montoBanco: selected.montoSistema };
+      update((prev) => prev.map((t) => (t.id === next.id ? next : t)));
+      setResolvedIds((prev) => new Set(prev).add(next.id));
+      // Back to the detail sheet so the user sees the confirmation.
       setPhase('detail');
       AccessibilityInfo.announceForAccessibility('Pago conciliado manualmente.');
     },
-    [selected],
+    [selected, update],
   );
 
   const value = useMemo(
     () => ({
-      transactions,
+      transactions: data.items,
+      source: data.source,
+      loading: data.loading,
       resolvedIds,
       selected,
       phase,
-      refreshTransactions,
+      refreshTransactions: data.refresh,
       open,
       close,
       startForce,
       cancelForce,
       confirmForce,
     }),
-    [transactions, resolvedIds, selected, phase, refreshTransactions, open, close, startForce, cancelForce, confirmForce],
+    [data.items, data.source, data.loading, data.refresh, resolvedIds, selected, phase, open, close, startForce, cancelForce, confirmForce],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

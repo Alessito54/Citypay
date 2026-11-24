@@ -1,11 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { isStaff } from '@/lib/roles';
 import { authService } from '@/services/auth-service';
 import type { Session } from '@/types';
 
 interface AuthValue {
   session: Session | null;
+  /** true until Firebase reports whether a stored session exists. */
   loading: boolean;
+  /** Staff roles see payments and reconciliation; citizens only reports. */
+  staff: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
@@ -18,29 +22,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = authService.onAuthStateChanged((userSession) => {
-      setSession(userSession);
-      setLoading(false);
-    });
-
-    return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, []);
+  useEffect(
+    () =>
+      authService.subscribe((s) => {
+        setSession(s);
+        setLoading(false);
+      }),
+    [],
+  );
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const res = await authService.signIn(email, password);
-    setSession(res);
+    setSession(await authService.signIn(email, password));
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
-    const res = await authService.signUp(email, password, displayName);
-    setSession(res);
-  }, []);
-
-  const sendPasswordReset = useCallback(async (email: string) => {
-    await authService.sendPasswordReset(email);
+    setSession(await authService.signUp(email, password, displayName));
   }, []);
 
   const signOut = useCallback(async () => {
@@ -49,8 +45,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ session, loading, signIn, signUp, sendPasswordReset, signOut }),
-    [session, loading, signIn, signUp, sendPasswordReset, signOut],
+    () => ({
+      session,
+      loading,
+      staff: isStaff(session?.role),
+      signIn,
+      signUp,
+      sendPasswordReset: authService.sendPasswordReset,
+      signOut,
+    }),
+    [session, loading, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

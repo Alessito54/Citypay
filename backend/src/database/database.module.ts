@@ -8,9 +8,7 @@ import { Payment } from '../payments/entities/payment.entity';
 import { CitizenReport } from '../reports/entities/report.entity';
 import { ReportImage } from '../reports/entities/report-image.entity';
 import { ReportStatusHistory } from '../reports/entities/report-status-history.entity';
-import { Department } from '../departments/entities/department.entity';
 import { InitialSchema1729000000000 } from './migrations/1729000000000-InitialSchema';
-import { Departments1763000000000 } from './migrations/1763000000000-Departments';
 import { DatabaseSeederService } from './database-seeder.service';
 
 @Module({
@@ -18,20 +16,16 @@ import { DatabaseSeederService } from './database-seeder.service';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const dbUrl = config.get<string>('DATABASE_URL') || '';
-        const useSsl = dbUrl.includes('sslmode=require') || (!dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1'));
-        return {
-          type: 'postgres',
-          url: dbUrl,
-          ssl: useSsl ? { rejectUnauthorized: false } : false,
-          entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory, Department],
-          migrations: [InitialSchema1729000000000, Departments1763000000000],
-          migrationsRun: false, // controlled explicitly in seeder
-          synchronize: false,
-          logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        url: config.get<string>('DATABASE_URL'),
+        ssl: { rejectUnauthorized: false },
+        entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory],
+        migrations: [InitialSchema1729000000000],
+        migrationsRun: false, // controlled explicitly in seeder
+        synchronize: false,
+        logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
+      }),
     }),
     TypeOrmModule.forFeature([
       User,
@@ -41,7 +35,6 @@ import { DatabaseSeederService } from './database-seeder.service';
       CitizenReport,
       ReportImage,
       ReportStatusHistory,
-      Department,
     ]),
   ],
   providers: [DatabaseSeederService],

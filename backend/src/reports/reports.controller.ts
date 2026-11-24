@@ -7,7 +7,6 @@ import {
   Param,
   Query,
   UseGuards,
-  ForbiddenException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ReportsService } from './reports.service';
@@ -19,15 +18,12 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
-import { DepartmentsService } from '../departments/departments.service';
+import { isStaff } from '../auth/roles';
 
 @Controller('reports')
 @UseGuards(FirebaseAuthGuard, RolesGuard)
 export class ReportsController {
-  constructor(
-    private readonly reportsService: ReportsService,
-    private readonly departmentsService: DepartmentsService,
-  ) {}
+  constructor(private readonly reportsService: ReportsService) {}
 
   @Get()
   async findAll(
@@ -36,45 +32,24 @@ export class ReportsController {
     @Query('priority') priority?: ReportPriority,
     @Query('q') q?: string,
     @Query('mine') mine?: string,
-    @Query('userId') queryUserId?: string,
-    @Query('departmentId') queryDepartmentId?: string,
     @CurrentUser() user?: User,
   ) {
-    const isStaff =
-      user &&
-      (user.role === UserRole.ADMIN ||
-        user.role === UserRole.MUNICIPAL_OFFICIAL ||
-        user.role === UserRole.MUNICIPAL_SUPERVISOR);
-
-    // Regular citizens can strictly and exclusively see their own reports from DB
-    const targetUserId = isStaff
-      ? mine === 'true'
-        ? user?.id
-        : queryUserId || undefined
-      : user?.id;
-
-    // A municipal official only works the queue of their own office; the admin
-    // and supervisors may narrow it down with the query parameter.
-    const departmentId =
-      user?.role === UserRole.MUNICIPAL_OFFICIAL
-        ? user.departmentId || undefined
-        : queryDepartmentId || undefined;
-
+    const userId = mine === 'true' && user ? user.id : undefined;
     const reports = await this.reportsService.findAll({
       category,
       status,
       priority,
       search: q,
-      userId: targetUserId,
-      departmentId: isStaff ? departmentId : undefined,
+      userId,
     });
     return reports.map(this.mapToDto);
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     const report = await this.reportsService.findById(id);
-    return this.mapToDetailDto(report);
+    // Reports are public to every signed-in user, but who filed them is not.
+    return this.mapToDetailDto(report, isStaff(user) || report.userId === user.id);
   }
 
   @Post()
@@ -93,40 +68,8 @@ export class ReportsController {
     @CurrentUser() user: User,
     @Body() dto: UpdateReportStatusDto,
   ) {
-    if (user.role === UserRole.MUNICIPAL_OFFICIAL) {
-      await this.assertOwnDepartment(id, user);
-      if (dto.departmentId && dto.departmentId !== user.departmentId) {
-        throw new ForbiddenException(
-          'Turnar un reporte a otro departamento corresponde a un supervisor o al administrador.',
-        );
-      }
-    }
-
     const updated = await this.reportsService.updateStatus(id, dto, user);
     return this.mapToDto(updated);
-  }
-
-  /**
-   * An official may only work the queue of their own office. A report with no
-   * department yet counts as theirs when its category is one they attend.
-   */
-  private async assertOwnDepartment(reportId: string, user: User) {
-    if (!user.departmentId) {
-      throw new ForbiddenException(
-        'Tu cuenta no está adscrita a un departamento, así que no puede atender reportes.',
-      );
-    }
-
-    const report = await this.reportsService.findById(reportId);
-    if (report.departmentId === user.departmentId) return;
-
-    if (report.departmentId === null) {
-      const own = await this.departmentsService.findById(user.departmentId);
-      const categories = (own.reportCategories || []).map((c) => c.trim().toLowerCase());
-      if (categories.includes(String(report.category || '').trim().toLowerCase())) return;
-    }
-
-    throw new ForbiddenException('Este reporte está turnado a otro departamento.');
   }
 
   private mapToDto(r: CitizenReport) {
@@ -141,20 +84,16 @@ export class ReportsController {
       icon: r.icon,
       description: r.description,
       fotos: r.images?.map((i) => i.secureUrl) || [],
-      departmentId: r.departmentId,
-      departamento: r.department?.name || null,
-      departamentoSlug: r.department?.slug || null,
-      localOnly: false,
+      latitude: r.latitude != null ? Number(r.latitude) : null,
+      longitude: r.longitude != null ? Number(r.longitude) : null,
       createdAt: r.createdAt,
     };
   }
 
-  private mapToDetailDto(r: CitizenReport) {
+  private mapToDetailDto(r: CitizenReport, showReporter: boolean) {
     return {
       ...this.mapToDto(r),
-      latitude: r.latitude ? Number(r.latitude) : null,
-      longitude: r.longitude ? Number(r.longitude) : null,
-      user: r.user
+      user: showReporter && r.user
         ? {
             id: r.user.id,
             displayName: r.user.displayName,

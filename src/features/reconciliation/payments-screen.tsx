@@ -1,18 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader } from '@/components/app-header';
-import { AdminLogo, HeaderLogo } from '@/components/brand';
-import { Icon } from '@/components/icon';
-import { cardShadow, EmptyState } from '@/components/ui';
-import { C, FONT, TOUCH } from '@/constants/colors';
-import { useAuth } from '@/features/auth/auth-context';
+import { EmptyState, Notice, SearchField } from '@/components/ui';
+import { ACCENT_BAR, C, FONT, RADIUS, TOUCH } from '@/constants/colors';
+import { ScreenTop } from '@/features/shell/screen-top';
 import type { Status } from '@/types';
 
 import { fmtMoney, SERVICE_LABEL } from './format';
 import { useReconciliation } from './reconciliation-context';
+import { searchText } from './selectors';
 import { STATUS_CFG, TransactionRow } from './transaction-row';
 
 type Filter = 'todos' | Status;
@@ -25,18 +22,14 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 const isFilter = (v: unknown): v is Filter => FILTERS.some((f) => f.id === v);
 
-/** Transaction list with status filter + free-text search, scoped to the signed-in role. */
+/** Payment list with status filter and free-text search. */
 export function PaymentsScreen() {
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ filtro?: string }>();
-  const { session } = useAuth();
-  const isAdmin = session?.role === 'admin';
-  const { transactions, resolvedIds, open } = useReconciliation();
+  const { transactions, source, loading, open } = useReconciliation();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>(isFilter(params.filtro) ? params.filtro : 'todos');
 
-  // Shortcuts on the home screen open this tab with a preset filter. Adjusting state
-  // during render when the param changes avoids an extra effect pass.
+  // Home shortcuts open this tab with a preset filter; adjust during render instead of an effect.
   const [lastParam, setLastParam] = useState(params.filtro);
   if (params.filtro !== lastParam) {
     setLastParam(params.filtro);
@@ -45,23 +38,18 @@ export function PaymentsScreen() {
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { todos: transactions.length, conciliado: 0, discrepancia: 0, pendiente: 0 };
-    transactions.forEach((t) => (c[resolvedIds.has(t.id) ? 'conciliado' : t.estado] += 1));
+    transactions.forEach((t) => (c[t.estado] += 1));
     return c;
-  }, [transactions, resolvedIds]);
+  }, [transactions]);
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return transactions.filter((t) => {
-      const estado: Status = resolvedIds.has(t.id) ? 'conciliado' : t.estado;
-      if (filter !== 'todos' && estado !== filter) return false;
-      if (!term) return true;
-      return `${t.folio} ${t.concepto} ${t.ciudadano} ${t.banco} ${t.referenciaBancaria} ${SERVICE_LABEL[t.servicio] || ''}`
-        .toLowerCase()
-        .includes(term);
-    });
-  }, [transactions, resolvedIds, q, filter]);
+    return transactions.filter(
+      (t) => (filter === 'todos' || t.estado === filter) && (!term || searchText(t, SERVICE_LABEL[t.servicio]).includes(term)),
+    );
+  }, [transactions, q, filter]);
 
-  const total = list.reduce((a, t) => a + (t.montoSistema || 0), 0);
+  const total = list.reduce((a, t) => a + t.montoSistema, 0);
   const hasFilters = q.trim() !== '' || filter !== 'todos';
   const clearAll = () => {
     setQ('');
@@ -70,9 +58,7 @@ export function PaymentsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <View style={{ paddingTop: insets.top, backgroundColor: C.white }}>
-        <AppHeader logo={isAdmin ? <AdminLogo /> : <HeaderLogo />} dot={isAdmin} />
-      </View>
+      <ScreenTop />
       <FlatList
         data={list}
         keyExtractor={(t) => t.id}
@@ -83,36 +69,18 @@ export function PaymentsScreen() {
           <View style={{ padding: 18, paddingBottom: 10, gap: 12 }}>
             <View>
               <Text accessibilityRole="header" style={s.h1}>
-                {isAdmin ? 'Conciliación de Pagos' : 'Mis Pagos Realizados'}
+                Pagos
               </Text>
-              <Text style={s.sub}>
-                {isAdmin
-                  ? `Recaudación municipal · ${list.length} registros · ${fmtMoney(total)}`
-                  : `Historial de tu cuenta · ${list.length} recibos · Total: ${fmtMoney(total)}`}
-              </Text>
+              <Text style={s.sub}>Toca un pago para ver su detalle o conciliarlo.</Text>
             </View>
-
-            <View style={s.search}>
-              <Icon name="search" size={18} color={C.text2} />
-              <TextInput
-                value={q}
-                onChangeText={setQ}
-                accessibilityLabel="Buscar pagos"
-                accessibilityHint={isAdmin ? 'Busca por folio, ciudadano, concepto o banco' : 'Busca por folio o concepto'}
-                placeholder={isAdmin ? 'Folio, ciudadano o banco' : 'Folio o concepto'}
-                placeholderTextColor={C.text3}
-                style={s.searchInput}
-                autoCorrect={false}
-                returnKeyType="search"
-                clearButtonMode="never"
-              />
-              {q ? (
-                <Pressable accessibilityRole="button" accessibilityLabel="Borrar búsqueda" onPress={() => setQ('')} style={s.clear}>
-                  <Icon name="xCircle" size={18} color={C.text2} />
-                </Pressable>
-              ) : null}
-            </View>
-            {isAdmin ? (
+            {source === 'demo' ? <Notice tone="warning" text="Sin conexión con el servidor: se muestran pagos de demostración." /> : null}
+            <SearchField
+              value={q}
+              onChangeText={setQ}
+              label="Buscar pagos"
+              hint="Busca por folio, ciudadano, concepto o banco"
+              placeholder="Folio, ciudadano o banco"
+            />
             <View style={s.chips} accessibilityRole="tablist">
               {FILTERS.map((f) => {
                 const on = filter === f.id;
@@ -124,19 +92,17 @@ export function PaymentsScreen() {
                     accessibilityState={{ selected: on }}
                     onPress={() => setFilter(f.id)}
                     style={[s.chip, on && s.chipOn]}>
-                    {on ? <Icon name="check" size={14} color="#fff" strokeWidth={2.6} /> : null}
                     <Text style={[s.chipText, on && { color: '#fff' }]}>{f.label}</Text>
-                    <View style={[s.chipCount, on && { backgroundColor: 'rgba(255,255,255,0.22)' }]}>
-                      <Text style={[s.chipCountText, on && { color: '#fff' }]}>{counts[f.id]}</Text>
+                    <View style={[s.count, on && { backgroundColor: 'rgba(255,255,255,0.22)' }]}>
+                      <Text style={[s.countText, on && { color: '#fff' }]}>{counts[f.id]}</Text>
                     </View>
                   </Pressable>
                 );
               })}
             </View>
-            ) : null}
             <View style={s.resultRow}>
               <Text style={s.result} accessibilityLiveRegion="polite">
-                {list.length} {list.length === 1 ? 'pago' : 'pagos'} · {fmtMoney(total)}
+                {loading ? 'Cargando pagos…' : `${list.length} ${list.length === 1 ? 'pago' : 'pagos'} · ${fmtMoney(total)}`}
                 {filter !== 'todos' ? ` · ${STATUS_CFG[filter].label}` : ''}
               </Text>
               {hasFilters ? (
@@ -148,29 +114,18 @@ export function PaymentsScreen() {
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            title={isAdmin ? 'No hay transacciones registradas' : 'Aún no tienes pagos registrados'}
-            body={
-              hasFilters
-                ? `Ningún pago coincide con “${q.trim()}” en este filtro.`
-                : isAdmin
-                  ? 'No se encontraron registros de recaudación.'
-                  : 'Cuando realices el pago de predial, agua o multas, tus comprobantes fiscales y folios aparecerán aquí.'
-            }
-            actionLabel={hasFilters ? 'Limpiar búsqueda y filtros' : undefined}
-            onAction={hasFilters ? clearAll : undefined}
-          />
+          loading ? null : (
+            <EmptyState
+              title="No encontramos pagos"
+              body={q ? `Ningún pago coincide con “${q.trim()}” en este filtro.` : 'No hay pagos con este estado.'}
+              actionLabel={hasFilters ? 'Limpiar búsqueda y filtros' : undefined}
+              onAction={clearAll}
+            />
+          )
         }
-        renderItem={({ item }) => (
-          <View style={{ paddingHorizontal: 18, paddingVertical: 4 }}>
-            <View style={s.card}>
-              <TransactionRow
-                tx={item}
-                resolved={resolvedIds.has(item.id)}
-                last
-                onPress={() => isAdmin && open(item)}
-              />
-            </View>
+        renderItem={({ item, index }) => (
+          <View style={[s.itemWrap, index === 0 && s.first, index === list.length - 1 && s.last]}>
+            <TransactionRow tx={item} last={index === list.length - 1} onPress={() => open(item)} />
           </View>
         )}
       />
@@ -181,18 +136,18 @@ export function PaymentsScreen() {
 const s = StyleSheet.create({
   h1: { fontFamily: FONT.displayXBold, fontSize: 26, color: C.navy },
   sub: { fontFamily: FONT.sans, fontSize: 14, color: C.text2, marginTop: 3 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, paddingLeft: 12, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder },
-  searchInput: { flex: 1, minWidth: 0, minHeight: 46, fontFamily: FONT.sans, fontSize: 16, color: C.text1, paddingVertical: 0 },
-  clear: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder },
-  chipOn: { backgroundColor: C.blue, borderColor: C.blue },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: TOUCH, paddingHorizontal: 12, borderRadius: RADIUS, backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder, borderBottomWidth: ACCENT_BAR, borderBottomColor: C.inputBorder },
+  chipOn: { backgroundColor: C.blue, borderColor: C.blue, borderBottomColor: C.navy },
   chipText: { fontFamily: FONT.sansSemi, fontSize: 13.5, color: C.blue },
-  chipCount: { minWidth: 22, paddingHorizontal: 5, height: 20, borderRadius: 10, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center' },
-  chipCountText: { fontFamily: FONT.sansBold, fontSize: 12, color: C.blue },
-  resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  count: { minWidth: 22, paddingHorizontal: 5, height: 20, borderRadius: RADIUS, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center' },
+  countText: { fontFamily: FONT.sansBold, fontSize: 12, color: C.blue },
+  resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', minHeight: TOUCH },
   result: { fontFamily: FONT.sansSemi, fontSize: 13, color: C.text2 },
   clearAll: { minHeight: TOUCH, justifyContent: 'center' },
   clearAllText: { fontFamily: FONT.sansSemi, fontSize: 14, color: C.blue, textDecorationLine: 'underline' },
-  card: { backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.border, overflow: 'hidden', ...cardShadow },
+  itemWrap: { backgroundColor: C.white, marginHorizontal: 18, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  first: { borderTopWidth: 1 },
+  last: { borderBottomWidth: 1 },
 });
+
