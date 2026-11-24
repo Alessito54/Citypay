@@ -70,7 +70,15 @@ export class UsersService {
       role: isAdmin ? UserRole.ADMIN : UserRole.CITIZEN,
     });
 
-    return this.usersRepository.save(newUser);
+    try {
+      return await this.usersRepository.save(newUser);
+    } catch (err: any) {
+      const raced = await this.usersRepository.findOne({
+        where: [{ firebaseUid: data.firebaseUid }, { email }],
+      });
+      if (raced) return raced;
+      throw err;
+    }
   }
 
   async findById(id: string): Promise<User> {

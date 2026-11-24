@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { type ComponentRef, forwardRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icon';
@@ -11,7 +11,7 @@ import type { LocationPicker } from './use-location-picker';
 
 /** Address field + "Mi ubicación" + "Buscar en el mapa" + interactive map. */
 export const LocationSection = forwardRef<
-  TextInput,
+  ComponentRef<typeof TextInput>,
   { loc: LocationPicker; error?: string; onEdit: () => void; onMapTouch: (active: boolean) => void }
 >(function LocationSection({ loc, error, onEdit, onMapTouch }, ref) {
   return (

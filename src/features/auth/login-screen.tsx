@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,8 +24,8 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   const [fieldErrors, setFieldErrors] = useState<AuthErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const emailRef = useRef<TextInput>(null);
-  const passRef = useRef<TextInput>(null);
+  const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const passRef = useRef<ComponentRef<typeof TextInput>>(null);
   const copy = AUTH_COPY[mode];
 
   const switchMode = (m: AuthMode) => {
