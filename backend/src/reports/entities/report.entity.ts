@@ -10,7 +10,6 @@ import {
   Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Department } from '../../departments/entities/department.entity';
 import { ReportImage } from './report-image.entity';
 import { ReportStatusHistory } from './report-status-history.entity';
 
@@ -78,15 +77,6 @@ export class CitizenReport {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
-
-  /** Department in charge of attending the incident. */
-  @Index()
-  @Column({ name: 'department_id', type: 'uuid', nullable: true })
-  departmentId: string | null;
-
-  @ManyToOne(() => Department, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'department_id' })
-  department: Department | null;
 
   @Column({ name: 'assigned_to_id', type: 'uuid', nullable: true })
   assignedToId: string | null;

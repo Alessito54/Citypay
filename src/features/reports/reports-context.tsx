@@ -1,57 +1,40 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 
-import { useAuth } from '@/features/auth/auth-context';
+import type { DataSource } from '@/lib/data-source';
+import { useSessionData } from '@/lib/use-session-data';
 import { reportsService } from '@/services/reports-service';
 import type { NewReportInput, Report } from '@/types';
 
+import { useAuth } from '../auth/auth-context';
+
 interface ReportsValue {
   reports: Report[];
+  source: DataSource;
   loading: boolean;
   refreshReports: () => Promise<void>;
   submitReport: (input: NewReportInput) => Promise<Report>;
 }
 
 const ReportsContext = createContext<ReportsValue | null>(null);
+const EMPTY: Report[] = [];
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
-  // Identity of the signed-in account: the backend answers with a different
-  // list for a citizen, an official and the administrator, so the data has to
-  // be fetched again whenever it changes instead of only on mount.
-  const accountKey = session ? `${session.uid ?? session.email}:${session.role ?? ''}` : null;
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(false);
+  const data = useSessionData(session?.uid ?? null, reportsService.list, EMPTY);
+  const { update } = data;
 
-  const refreshReports = useCallback(async () => {
-    if (!accountKey) {
-      setReports([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const list = await reportsService.list();
-      setReports(list);
-    } finally {
-      setLoading(false);
-    }
-  }, [accountKey]);
-
-  // The provider owns this data, so the request belongs here; it re-runs on
-  // sign-in, on sign-out and when the role changes.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshReports();
-  }, [refreshReports]);
-
-  const submitReport = useCallback(async (input: NewReportInput) => {
-    const created = await reportsService.submit(input);
-    setReports((prev) => [created, ...prev]);
-    return created;
-  }, []);
+  const submitReport = useCallback(
+    async (input: NewReportInput) => {
+      const created = await reportsService.submit(input);
+      update((prev) => [created, ...prev]);
+      return created;
+    },
+    [update],
+  );
 
   const value = useMemo(
-    () => ({ reports, loading, refreshReports, submitReport }),
-    [reports, loading, refreshReports, submitReport],
+    () => ({ reports: data.items, source: data.source, loading: data.loading, refreshReports: data.refresh, submitReport }),
+    [data.items, data.source, data.loading, data.refresh, submitReport],
   );
 
   return <ReportsContext.Provider value={value}>{children}</ReportsContext.Provider>;

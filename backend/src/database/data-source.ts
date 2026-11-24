@@ -7,9 +7,7 @@ import { Payment } from '../payments/entities/payment.entity';
 import { CitizenReport } from '../reports/entities/report.entity';
 import { ReportImage } from '../reports/entities/report-image.entity';
 import { ReportStatusHistory } from '../reports/entities/report-status-history.entity';
-import { Department } from '../departments/entities/department.entity';
 import { InitialSchema1729000000000 } from './migrations/1729000000000-InitialSchema';
-import { Departments1763000000000 } from './migrations/1763000000000-Departments';
 
 dotenv.config();
 
@@ -17,8 +15,8 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory, Department],
-  migrations: [InitialSchema1729000000000, Departments1763000000000],
+  entities: [User, MunicipalService, Debt, Payment, CitizenReport, ReportImage, ReportStatusHistory],
+  migrations: [InitialSchema1729000000000],
   synchronize: false,
   logging: false,
 });

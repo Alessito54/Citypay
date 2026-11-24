@@ -49,8 +49,6 @@ export default function RootLayout() {
               <Stack.Screen name="loading" options={{ animation: 'fade', gestureEnabled: false }} />
               <Stack.Screen name="(tabs)" options={{ animation: 'fade', gestureEnabled: false }} />
               <Stack.Screen name="new-report" />
-              <Stack.Screen name="department/[slug]" />
-              <Stack.Screen name="informes" />
             </Stack>
           </ReportsProvider>
         </ReconciliationProvider>

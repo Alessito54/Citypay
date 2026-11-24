@@ -46,44 +46,6 @@ export class FirebaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token de autenticación no proporcionado.');
     }
 
-    // Dev/Seed shortcut tokens for local testing
-    if (process.env.NODE_ENV !== 'production') {
-      if (token === 'dev_admin_token' || token === 'dev-token-admin') {
-        const adminUser = await this.usersService.findByEmail('admin@citypay.gob.mx');
-        if (adminUser) {
-          request.user = adminUser;
-          request.firebaseToken = { uid: adminUser.firebaseUid, email: adminUser.email };
-          return true;
-        }
-      }
-
-      const STAFF_DEV_TOKENS: Record<string, string> = {
-        dev_official_token: 'funcionario@citypay.gob.mx',
-        dev_supervisor_token: 'supervisor@citypay.gob.mx',
-        dev_treasury_token: 'tesoreria@citypay.gob.mx',
-      };
-      const staffEmail = STAFF_DEV_TOKENS[token];
-      if (staffEmail) {
-        const staffUser = await this.usersService.findByEmail(staffEmail);
-        if (staffUser) {
-          request.user = staffUser;
-          request.firebaseToken = { uid: staffUser.firebaseUid, email: staffUser.email };
-          return true;
-        }
-      }
-
-      if (token === 'dev_demo_token' || token === 'dev-token-demo' || token === 'dev_citizen_token') {
-        const demoUser =
-          (await this.usersService.findByEmail('demo@citypay.gob.mx')) ||
-          (await this.usersService.findByEmail('ciudadano@citypay.gob.mx'));
-        if (demoUser) {
-          request.user = demoUser;
-          request.firebaseToken = { uid: demoUser.firebaseUid, email: demoUser.email };
-          return true;
-        }
-      }
-    }
-
     const decoded = await this.firebaseService.verifyToken(token);
 
     const email = decoded.email || `${decoded.uid}@citypay.gob.mx`;
@@ -94,6 +56,7 @@ export class FirebaseAuthGuard implements CanActivate {
         firebaseUid: decoded.uid,
         email,
         displayName: decoded.name,
+        emailVerified: decoded.email_verified === true,
       });
 
       // Attach validated user (with DB role) to request

@@ -12,11 +12,9 @@ build. Store them in the secret manager for the backend that will access
 PostgreSQL or sign Cloudinary uploads. The values previously shared for these
 services should be rotated before use.
 
-The app reads its data from the NestJS backend in `backend/`, which persists to
-PostgreSQL (Neon). `EXPO_PUBLIC_API_URL` has to point at a running instance of
-that backend, or every screen fails with "No se pudo conectar con el servidor
-municipal". There is no demo-data fallback any more: a freshly registered
-account starts empty, by design.
+The current app still uses demo authentication and in-memory report and
+reconciliation services; adding environment variables does not enable those
+services automatically.
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
@@ -42,120 +40,6 @@ In the output, you'll find options to open the app in a
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Departamentos municipales
-
-La administración se organiza en departamentos (`departments`): Tesorería,
-Catastro, Agua Potable, Tránsito, Obras Públicas, Servicios Públicos y
-Contraloría. Cada uno declara:
-
-- `serviceSlugs`: los servicios cuya recaudación le corresponde (`predial`,
-  `agua`, `multas`). Tesorería los tiene todos y está marcada con
-  `isConsolidator`, por lo que los informes agrupados por departamento la
-  omiten y el mismo peso nunca se cuenta dos veces.
-- `reportCategories`: las categorías de reportes ciudadanos que atiende. Son
-  mutuamente excluyentes, así que al crear un reporte el backend lo turna solo
-  al área responsable (`citizen_reports.department_id`).
-- `slaDays`: el plazo comprometido de atención, con el que se calculan los
-  reportes "fuera de plazo".
-
-Las cuentas de funcionario y supervisor se adscriben a un departamento
-(`users.department_id`); las ciudadanas nunca. Un funcionario solo ve y
-actualiza la bandeja de su área; turnar un reporte a otro departamento es
-facultad del supervisor o del administrador.
-
-Pantallas: pestaña **Áreas** (solo personal municipal; el ciudadano llega al
-mismo directorio sin indicadores desde su perfil), panel por departamento en
-`/department/[slug]` y **Centro de Informes** en `/informes` (recaudación,
-conciliación, cartera, desempeño y reportes, con exportación a CSV —
-descarga directa en web, texto seleccionable en la app).
-
-Cuentas sembradas para probar cada rol (atajos en la pantalla de inicio de
-sesión, válidos solo con `NODE_ENV` sin definir):
-
-| Correo | Rol | Departamento |
-| --- | --- | --- |
-| `admin@citypay.gob.mx` | Administrador | — (ve todo) |
-| `supervisor@citypay.gob.mx` | Supervisor | Obras Públicas |
-| `funcionario@citypay.gob.mx` | Funcionario | Servicios Públicos |
-| `tesoreria@citypay.gob.mx` | Funcionario | Tesorería |
-| `demo@citypay.gob.mx` | Ciudadano | — |
-
-## Deploy the backend to Render
-
-[`render.yaml`](render.yaml) is a Blueprint: **New > Blueprint** in the Render
-dashboard, pick this repository, and Render prompts for every secret. It builds
-from the `backend/` subdirectory, so nothing else in the repo matters to it.
-
-```
-Build:  npm ci --include=dev && npm run build
-Start:  npm run start:prod
-Health: /health
-```
-
-`--include=dev` is not optional: `@nestjs/cli` and `typescript` live in
-`devDependencies`, and npm skips those when `NODE_ENV=production`, so the build
-would fail with `nest: not found`.
-
-**Leave `NODE_ENV` unset.** Setting it to `production` disables the dev-token
-shortcut in `FirebaseAuthGuard`, and the **Admin** and **Demo Ciudadano**
-buttons on the login screen depend on it — verified: with `NODE_ENV=production`
-those requests come back `401`. Making them work in production instead means
-creating `admin@citypay.gob.mx` and `demo@citypay.gob.mx` in Firebase
-Authentication with real passwords.
-
-Set `CORS_ORIGINS` to the Netlify domain (comma-separated, no trailing slash) as
-soon as the frontend is live, then put the Render URL into
-`EXPO_PUBLIC_API_URL` in Netlify and redeploy the site so the new value is
-inlined into the bundle.
-
-On the free plan the service sleeps after inactivity, so the first request after
-a pause takes a few seconds — long enough that the app may briefly show the
-connection error before the data arrives.
-
-## Deploy the web app to Netlify
-
-The web build is a static site. [`netlify.toml`](netlify.toml) already sets the
-build command (`npx expo export --platform web`) and publish directory (`dist`),
-so connecting the repository in Netlify is enough — no `_redirects` file is
-needed, because `web.output` is `"static"` and every route gets its own HTML
-file.
-
-Before the first build, set the `EXPO_PUBLIC_*` variables under **Site
-configuration > Environment variables**. Expo inlines them into the client
-bundle *at build time*, so a variable added afterwards needs a redeploy to take
-effect. `netlify.toml` lists the full set.
-
-**Do not mark any of them as "secret."** Netlify may warn that the Firebase API
-key looks sensitive, but a Firebase web API key identifies the project rather
-than granting access — access is controlled by Firebase Security Rules and the
-authorised-domain list, and the key ships in every client build by design.
-Marking it secret makes the build fail, because Netlify's scanner finds the
-value in the generated bundle. `netlify.toml` already lists these keys under
-`SECRETS_SCAN_OMIT_KEYS` for that reason.
-
-Add the Netlify domain to **Firebase Console > Authentication > Settings >
-Authorised domains**, or sign-in from the deployed site fails with
-`auth/unauthorized-domain`.
-
-Two things this does not cover:
-
-- **The backend is not deployed by this.** Netlify serves static files and
-  serverless functions; the NestJS app in `backend/` needs its own host (Render,
-  Railway, Fly.io…). Point `EXPO_PUBLIC_API_URL` at that deployment.
-- **It must be HTTPS.** A site served over HTTPS cannot call an `http://`
-  API — the browser blocks it as mixed content — so `http://localhost:3000`
-  will not work from the deployed site.
-
-Also add the Netlify domain to `CORS_ORIGINS` in the backend environment, or the
-browser will reject the responses.
-
-To check a production build locally before pushing:
-
-```bash
-npx expo export --platform web
-npx serve dist
-```
 
 ## Get a fresh project
 

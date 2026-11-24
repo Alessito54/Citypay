@@ -60,8 +60,8 @@ export function Icon({ name, size = 18, color = '#000', fill = 'none', strokeWid
       fill={fill}
       stroke={color}
       strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round">
+      strokeLinecap="square"
+      strokeLinejoin="miter">
       {ICONS[name]}
     </Svg>
   );

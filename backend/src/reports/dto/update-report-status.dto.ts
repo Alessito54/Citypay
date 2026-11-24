@@ -13,9 +13,4 @@ export class UpdateReportStatusDto {
   @IsOptional()
   @IsUUID('4', { message: 'El assignedToId debe ser un UUID válido.' })
   assignedToId?: string;
-
-  /** Lets a supervisor re-route the incident to another department. */
-  @IsOptional()
-  @IsUUID('4', { message: 'El departmentId debe ser un UUID válido.' })
-  departmentId?: string;
 }
