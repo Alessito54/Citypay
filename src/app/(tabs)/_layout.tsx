@@ -18,7 +18,7 @@ const TABS: Record<string, { label: string; icon: IconName; staffOnly?: boolean 
   profile: { label: 'Perfil', icon: 'user' },
 };
 
-function TabBar({ state, navigation, staff }: BottomTabBarProps & { staff: boolean }) {
+function TabBar({ state, emitter, navigateToTab, staff }: BottomTabBarProps & { staff: boolean }) {
   const insets = useSafeAreaInsets();
   const visible = state.routes.filter((r) => TABS[r.name] && (staff || !TABS[r.name].staffOnly));
   return (
@@ -34,8 +34,8 @@ function TabBar({ state, navigation, staff }: BottomTabBarProps & { staff: boole
             accessibilityLabel={`${cfg.label}, pestaña ${i + 1} de ${visible.length}`}
             accessibilityState={{ selected: active }}
             onPress={() => {
-              const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-              if (!active && !e.defaultPrevented) navigation.navigate(route.name);
+              const e = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!active && !e.defaultPrevented) navigateToTab(route.key);
             }}
             style={[s.item, active && s.itemOn]}>
             <Icon name={cfg.icon} size={22} color={color} />

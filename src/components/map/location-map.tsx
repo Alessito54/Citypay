@@ -17,7 +17,7 @@ export function LocationMap({
   accessibilityLabel,
   accessibilityHint,
 }: LocationMapProps) {
-  const web = useRef<WebView>(null);
+  const web = useRef<WebView<unknown>>(null);
   const ready = useRef(false);
   /** Last point the user picked on the map: echoing it back would re-center and re-zoom the map. */
   const lastPick = useRef<string | null>(null);
@@ -68,7 +68,7 @@ export function LocationMap({
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       onTouchActiveChange={interactive ? onTouchActiveChange : undefined}>
-      <WebView
+      <WebView<unknown>
         ref={web}
         originWhitelist={['*']}
         source={{ html, baseUrl: MAP_BASE_URL }}

@@ -45,7 +45,11 @@
         {
           "locationWhenInUsePermission": "CityPay usa tu ubicación para indicar dónde ocurre el problema reportado."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

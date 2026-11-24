@@ -81,7 +81,7 @@ export function ReportsScreen() {
           </View>
         }
         ListEmptyComponent={
-          loading ? null : active ? (
+          loading ? undefined : active ? (
             <EmptyState title="No hay reportes con esos filtros" body="Prueba con otra búsqueda o quita algunos filtros." actionLabel="Limpiar filtros" onAction={() => setF(NO_FILTERS)} />
           ) : (
             <EmptyState title="Aún no hay reportes" body="Cuando alguien reporte un problema aparecerá aquí." />
