@@ -62,6 +62,7 @@ export function buildMapHtml(config: MapConfig): string {
   /* Zoom buttons at 44px: the Leaflet default (30px) is below the minimum touch target. */
   .leaflet-control-zoom a { width: 44px !important; height: 44px !important; line-height: 44px !important; font-size: 22px !important; color: #1B3FA0 !important; }
   .leaflet-control-attribution { font-size: 11px; }
+  .leaflet-bar, .leaflet-bar a, .leaflet-control-attribution { border-radius: 0 !important; }
   .cp-pin { filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
   #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 16px; color: #526073; font-size: 14px; background: #EEF4FF; }
 </style>

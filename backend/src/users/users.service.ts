@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
@@ -11,44 +11,63 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
+  /**
+   * Emails that get the admin role when their account is first created, from ADMIN_EMAILS
+   * (comma-separated, exact match). Replaces the old rule "starts with admin@", which gave
+   * admin to anyone who registered e.g. admin@gmail.com.
+   */
+  private adminEmails(): Set<string> {
+    return new Set(
+      (process.env.ADMIN_EMAILS ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    );
+  }
+
   async syncUser(data: {
     firebaseUid: string;
     email: string;
     displayName?: string;
+    /** Firebase `email_verified` claim. Only a verified email may link or elevate an account. */
+    emailVerified?: boolean;
   }): Promise<User> {
-    const existing = await this.usersRepository.findOne({
-      where: [{ firebaseUid: data.firebaseUid }, { email: data.email }],
-    });
+    const email = data.email.toLowerCase();
+    let existing = await this.usersRepository.findOne({ where: { firebaseUid: data.firebaseUid } });
+
+    if (!existing) {
+      const byEmail = await this.usersRepository.findOne({ where: { email } });
+      if (byEmail) {
+        // Linking a Firebase account to an existing profile hands over its role, so the
+        // email must be proven. Otherwise anyone could register a seeded staff email.
+        if (!data.emailVerified) {
+          throw new ConflictException(
+            'Ya existe un perfil con este correo. Verifica tu correo electrónico para vincular la cuenta.',
+          );
+        }
+        byEmail.firebaseUid = data.firebaseUid;
+        existing = await this.usersRepository.save(byEmail);
+      }
+    }
 
     if (existing) {
-      let needsSave = false;
-      if (existing.firebaseUid !== data.firebaseUid) {
-        existing.firebaseUid = data.firebaseUid;
-        needsSave = true;
-      }
       if (data.displayName && existing.displayName !== data.displayName) {
         existing.displayName = data.displayName;
-        needsSave = true;
-      }
-      if (needsSave) {
         return this.usersRepository.save(existing);
       }
       return existing;
     }
 
-    // Assign admin role if designated admin or default to citizen
-    const isInitialAdmin =
-      data.email.toLowerCase().startsWith('admin@') ||
-      data.email.toLowerCase().includes('alessito54');
+    const isAdmin = Boolean(data.emailVerified) && this.adminEmails().has(email);
 
     const newUser = this.usersRepository.create({
       firebaseUid: data.firebaseUid,
-      email: data.email,
+      email,
       displayName:
         data.displayName ||
-        data.email.split('@')[0].replace(/[._-]+/g, ' ') ||
+        email.split('@')[0].replace(/[._-]+/g, ' ') ||
         'Ciudadano',
-      role: isInitialAdmin ? UserRole.ADMIN : UserRole.CITIZEN,
+      role: isAdmin ? UserRole.ADMIN : UserRole.CITIZEN,
     });
 
     return this.usersRepository.save(newUser);

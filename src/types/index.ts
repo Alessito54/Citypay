@@ -28,8 +28,9 @@ export interface Report {
   categoria: string;
   prioridad: ReportPrioridad;
   icon: string;
-  /** true when the record only exists on this device (no backend). */
-  localOnly?: boolean;
+  description?: string;
+  /** Cloudinary URLs of the evidence photos. */
+  fotos?: string[];
   /** Pin chosen on the map, when the citizen marked one. */
   latitude?: number;
   longitude?: number;
@@ -38,7 +39,7 @@ export interface Report {
 export interface NewReportInput {
   categoria: string;
   problema: string;
-  prioridad: 'Bajo' | 'Media' | 'Alta';
+  prioridad: ReportPrioridad;
   direccion: string;
   descripcion: string;
   fotos: string[];
@@ -50,9 +51,8 @@ export interface NewReportInput {
 export interface Session {
   email: string;
   displayName: string;
-  /** true while no real authentication backend is connected. */
-  demo: boolean;
-  role?: string;
-  uid?: string;
+  /** Server-verified role (users.role). */
+  role: string;
+  uid: string;
 }
 

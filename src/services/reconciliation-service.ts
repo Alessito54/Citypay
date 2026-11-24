@@ -1,4 +1,6 @@
+import { isDemoId, type Loaded } from '@/lib/data-source';
 import type { Transaction } from '@/types';
+
 import { apiClient } from './api-client';
 import { DEMO_TRANSACTIONS } from './demo-data';
 
@@ -9,33 +11,26 @@ export interface ForceReconcileInput {
 }
 
 export const reconciliationService = {
-  isDemo: false,
-
-  async listTransactions(): Promise<Transaction[]> {
+  /** Payments from the API (staff only). Falls back to demo data when the API cannot be used. */
+  async listTransactions(): Promise<Loaded<Transaction[]>> {
     try {
-      const transactions = await apiClient<Transaction[]>('/payments');
-      if (Array.isArray(transactions) && transactions.length > 0) {
-        return transactions;
-      }
-      return DEMO_TRANSACTIONS;
-    } catch {
-      return DEMO_TRANSACTIONS;
+      return { items: await apiClient<Transaction[]>('/payments'), source: 'api' };
+    } catch (err) {
+      return { items: DEMO_TRANSACTIONS, source: 'demo', reason: err instanceof Error ? err.message : undefined };
     }
   },
 
-  async forceReconcile(input: ForceReconcileInput): Promise<void> {
+  /**
+   * Records a manual reconciliation in the audit trail. Errors propagate: the previous
+   * version swallowed them and showed "conciliado" even when the server had refused it.
+   * Demo records only change on this device.
+   */
+  async forceReconcile(input: ForceReconcileInput): Promise<Transaction | null> {
     if (!input.reason) throw new Error('Selecciona un motivo.');
-
-    try {
-      await apiClient(`/payments/${input.transactionId}/reconcile`, {
-        method: 'POST',
-        body: JSON.stringify({
-          reason: input.reason,
-          notes: input.notes,
-        }),
-      });
-    } catch {
-      // If endpoint fails or local ID, caller will record locally
-    }
+    if (isDemoId(input.transactionId)) return null;
+    return apiClient<Transaction>(`/payments/${input.transactionId}/reconcile`, {
+      method: 'POST',
+      body: { reason: input.reason, notes: input.notes },
+    });
   },
 };

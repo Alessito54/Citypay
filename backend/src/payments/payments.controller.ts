@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { SimulatePaymentDto } from './dto/create-payment.dto';
@@ -17,6 +18,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
+import { isStaff } from '../auth/roles';
 
 @Controller('payments')
 @UseGuards(FirebaseAuthGuard, RolesGuard)
@@ -40,8 +42,12 @@ export class PaymentsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     const payment = await this.paymentsService.findById(id);
+    // Citizens may only read their own payments; staff may read any.
+    if (!isStaff(user) && payment.userId !== user.id) {
+      throw new NotFoundException('Pago o transacción no encontrada.');
+    }
     return this.mapToDto(payment);
   }
 

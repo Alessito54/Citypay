@@ -59,7 +59,7 @@ export function LoadingScreen({ onDone, delay = 1000 }: { onDone?: () => void; d
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingBottom: 40 },
-  spinner: { width: 44, height: 44, borderRadius: 22, borderWidth: 5, borderColor: C.blueIcon, borderTopColor: C.blue, marginTop: 44 },
+  spinner: { width: 40, height: 40, borderWidth: 5, borderColor: C.blueIcon, borderTopColor: C.blue, marginTop: 44 },
   title: { fontFamily: FONT.sansBold, fontSize: 16, color: C.navy, marginTop: 18, textAlign: 'center' },
   sub: { fontFamily: FONT.sans, fontSize: 14, color: C.text2, marginTop: 4, textAlign: 'center' },
 });

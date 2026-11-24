@@ -1,6 +1,6 @@
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { C, FONT } from '@/constants/colors';
+import { C, FONT, RADIUS } from '@/constants/colors';
 import type { Coords } from '@/services/geocoding';
 
 export interface LocationMapProps {
@@ -79,9 +79,9 @@ export function MapFrame({
 }
 
 const s = StyleSheet.create({
-  frame: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: C.inputBorder, backgroundColor: C.blueSoft },
+  frame: { borderRadius: RADIUS, overflow: 'hidden', borderWidth: 1, borderColor: C.inputBorder, backgroundColor: C.blueSoft },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, backgroundColor: C.blueSoft },
   overlayText: { fontFamily: FONT.sansSemi, fontSize: 13.5, color: C.text2, textAlign: 'center' },
-  banner: { position: 'absolute', left: 8, right: 8, top: 8, padding: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.95)' },
+  banner: { position: 'absolute', left: 8, right: 8, top: 8, padding: 8, borderRadius: RADIUS, backgroundColor: 'rgba(255,255,255,0.95)' },
   bannerText: { fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.danger, textAlign: 'center' },
 });

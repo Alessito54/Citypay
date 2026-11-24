@@ -111,8 +111,8 @@ export class ReportsService {
         icon,
         date: dateFormatted,
         status: ReportStatus.NUEVO,
-        latitude: dto.latitude || null,
-        longitude: dto.longitude || null,
+        latitude: dto.latitude ?? null,
+        longitude: dto.longitude ?? null,
         userId: user.id,
       });
 

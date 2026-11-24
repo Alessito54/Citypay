@@ -37,6 +37,15 @@ export const C = {
   disabledText: '#4F5B6E',
 } as const;
 
+/**
+ * Shape: the visual language is square. Every surface (cards, buttons, inputs, chips,
+ * sheets, avatars, badges) uses this radius, so the look is changed in one place.
+ */
+export const RADIUS = 0;
+
+/** Accent bar used instead of rounded "pill" highlights to mark the selected option. */
+export const ACCENT_BAR = 4;
+
 /** Minimum touch target (iOS HIG 44pt; Android recommends 48dp). */
 export const TOUCH = 44;
 

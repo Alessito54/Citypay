@@ -56,6 +56,7 @@ export class FirebaseAuthGuard implements CanActivate {
         firebaseUid: decoded.uid,
         email,
         displayName: decoded.name,
+        emailVerified: decoded.email_verified === true,
       });
 
       // Attach validated user (with DB role) to request

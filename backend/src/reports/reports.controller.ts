@@ -18,6 +18,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
+import { isStaff } from '../auth/roles';
 
 @Controller('reports')
 @UseGuards(FirebaseAuthGuard, RolesGuard)
@@ -45,9 +46,10 @@ export class ReportsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
     const report = await this.reportsService.findById(id);
-    return this.mapToDetailDto(report);
+    // Reports are public to every signed-in user, but who filed them is not.
+    return this.mapToDetailDto(report, isStaff(user) || report.userId === user.id);
   }
 
   @Post()
@@ -82,17 +84,16 @@ export class ReportsController {
       icon: r.icon,
       description: r.description,
       fotos: r.images?.map((i) => i.secureUrl) || [],
-      localOnly: false,
+      latitude: r.latitude != null ? Number(r.latitude) : null,
+      longitude: r.longitude != null ? Number(r.longitude) : null,
       createdAt: r.createdAt,
     };
   }
 
-  private mapToDetailDto(r: CitizenReport) {
+  private mapToDetailDto(r: CitizenReport, showReporter: boolean) {
     return {
       ...this.mapToDto(r),
-      latitude: r.latitude ? Number(r.latitude) : null,
-      longitude: r.longitude ? Number(r.longitude) : null,
-      user: r.user
+      user: showReporter && r.user
         ? {
             id: r.user.id,
             displayName: r.user.displayName,

@@ -1,188 +1,110 @@
 import {
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut as fbSignOut,
-  sendPasswordResetEmail,
-  updateProfile,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
   type User as FirebaseUser,
 } from 'firebase/auth';
+
 import { getFirebaseAuth } from '@/config/firebase';
-import { apiClient } from './api-client';
+import { isEmail, MIN_PASSWORD } from '@/lib/validation';
 import type { Session } from '@/types';
 
+import { apiClient } from './api-client';
+
+interface Profile {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
+
+const FIREBASE_ERRORS: Record<string, string> = {
+  'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+  'auth/wrong-password': 'Correo o contraseña incorrectos.',
+  'auth/user-not-found': 'Correo o contraseña incorrectos.',
+  'auth/too-many-requests': 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.',
+  'auth/invalid-email': 'El formato del correo no es válido.',
+  'auth/email-already-in-use': 'Ya existe una cuenta con este correo.',
+  'auth/weak-password': `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`,
+  'auth/network-request-failed': 'Sin conexión. Revisa tu internet e inténtalo de nuevo.',
+};
+
+function friendly(err: unknown, fallback: string): Error {
+  const code = (err as { code?: string })?.code;
+  if (code && FIREBASE_ERRORS[code]) return new Error(FIREBASE_ERRORS[code]);
+  return err instanceof Error && err.message ? err : new Error(fallback);
+}
+
+/**
+ * The role always comes from the backend. If the backend cannot be reached the session is
+ * still created as a citizen (least privilege), never as staff.
+ */
+async function toSession(user: FirebaseUser): Promise<Session> {
+  const fallbackName = user.displayName || user.email?.split('@')[0] || 'Usuario';
+  try {
+    const p = await apiClient<Profile>('/users/me');
+    return { uid: user.uid, email: p.email || user.email || '', displayName: p.displayName || fallbackName, role: p.role || 'citizen' };
+  } catch {
+    return { uid: user.uid, email: user.email || '', displayName: fallbackName, role: 'citizen' };
+  }
+}
+
+function assertEmail(email: string) {
+  if (!isEmail(email)) throw new Error('Ingresa un correo electrónico válido.');
+}
+
 export const authService = {
-  isDemo: false,
-
-  /**
-   * Listen to auth state changes to restore session on app launch
-   */
-  onAuthStateChanged(callback: (session: Session | null) => void) {
+  /** Restores the session on app launch and reports sign-in / sign-out. */
+  subscribe(callback: (session: Session | null) => void): () => void {
     try {
-      const auth = getFirebaseAuth();
-      return onAuthStateChanged(auth, async (user: FirebaseUser | null) => {
-        if (!user) {
-          callback(null);
-          return;
-        }
-
-        try {
-          // Fetch authenticated profile from backend to get server-verified role
-          const profile = await apiClient<{
-            id: string;
-            email: string;
-            displayName: string;
-            role: string;
-          }>('/users/me');
-
-          callback({
-            email: profile.email || user.email || '',
-            displayName: profile.displayName || user.displayName || 'Usuario',
-            role: profile.role || 'citizen',
-            uid: user.uid,
-            demo: false,
-          });
-        } catch {
-          // If backend is temporarily unreachable, provide local session info
-          callback({
-            email: user.email || '',
-            displayName: user.displayName || user.email?.split('@')[0] || 'Usuario',
-            role: 'citizen',
-            uid: user.uid,
-            demo: false,
-          });
-        }
-      });
+      return onAuthStateChanged(getFirebaseAuth(), async (user) => callback(user ? await toSession(user) : null));
     } catch {
       callback(null);
       return () => {};
     }
   },
 
-  /**
-   * Sign in with Email and Password
-   */
   async signIn(email: string, password: string): Promise<Session> {
-    const mail = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
-      throw new Error('Ingresa un correo electrónico válido.');
-    }
-    if (password.length === 0) {
-      throw new Error('Ingresa tu contraseña.');
-    }
-
+    assertEmail(email);
+    if (!password) throw new Error('Ingresa tu contraseña.');
     try {
-      const auth = getFirebaseAuth();
-      const cred = await signInWithEmailAndPassword(auth, mail, password);
-
-      // Verify and sync with backend
-      const profile = await apiClient<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: string;
-      }>('/users/me');
-
-      return {
-        email: profile.email || cred.user.email || mail,
-        displayName: profile.displayName || cred.user.displayName || mail.split('@')[0],
-        role: profile.role,
-        uid: cred.user.uid,
-        demo: false,
-      };
-    } catch (err: any) {
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        throw new Error('Credenciales incorrectas. Verifica tu correo y contraseña.');
-      } else if (err.code === 'auth/too-many-requests') {
-        throw new Error('Demasiados intentos fallidos. Intenta más tarde.');
-      } else if (err.code === 'auth/invalid-email') {
-        throw new Error('El formato de correo no es válido.');
-      } else if (err.message) {
-        throw new Error(err.message);
-      }
-      throw new Error('No se pudo iniciar sesión.');
+      const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
+      return await toSession(cred.user);
+    } catch (err) {
+      throw friendly(err, 'No se pudo iniciar sesión.');
     }
   },
 
-  /**
-   * Register with Email, Password and optional Display Name
-   */
   async signUp(email: string, password: string, displayName?: string): Promise<Session> {
-    const mail = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
-      throw new Error('Ingresa un correo electrónico válido.');
-    }
-    if (password.length < 6) {
-      throw new Error('La contraseña debe tener al menos 6 caracteres.');
-    }
-
+    assertEmail(email);
+    if (password.length < MIN_PASSWORD) throw new Error(FIREBASE_ERRORS['auth/weak-password']);
     try {
-      const auth = getFirebaseAuth();
-      const cred = await createUserWithEmailAndPassword(auth, mail, password);
-
-      const name = displayName?.trim() || mail.split('@')[0];
-      try {
-        await updateProfile(cred.user, { displayName: name });
-      } catch {
-        // non-blocking
-      }
-
-      // Sync user with backend
-      const profile = await apiClient<{
-        id: string;
-        email: string;
-        displayName: string;
-        role: string;
-      }>('/users/me');
-
-      return {
-        email: profile.email || mail,
-        displayName: profile.displayName || name,
-        role: profile.role,
-        uid: cred.user.uid,
-        demo: false,
-      };
-    } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        throw new Error('Ya existe una cuenta registrada con este correo.');
-      } else if (err.code === 'auth/weak-password') {
-        throw new Error('La contraseña es demasiado débil (mínimo 6 caracteres).');
-      } else if (err.message) {
-        throw new Error(err.message);
-      }
-      throw new Error('No se pudo registrar la cuenta.');
+      const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
+      const name = displayName?.trim() || email.trim().split('@')[0];
+      await updateProfile(cred.user, { displayName: name }).catch(() => {});
+      // Refresh the token so the backend receives the new display name.
+      await cred.user.getIdToken(true).catch(() => {});
+      return await toSession(cred.user);
+    } catch (err) {
+      throw friendly(err, 'No se pudo crear la cuenta.');
     }
   },
 
-  /**
-   * Send Password Reset Email
-   */
   async sendPasswordReset(email: string): Promise<void> {
-    const mail = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
-      throw new Error('Ingresa un correo electrónico válido.');
-    }
-
+    assertEmail(email);
     try {
-      const auth = getFirebaseAuth();
-      await sendPasswordResetEmail(auth, mail);
-    } catch (err: any) {
-      if (err.code === 'auth/user-not-found') {
-        throw new Error('No existe una cuenta registrada con este correo.');
-      }
-      throw new Error('No se pudo enviar el correo de recuperación.');
+      await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
+    } catch (err) {
+      // Do not reveal whether an account exists for this email.
+      if ((err as { code?: string })?.code === 'auth/user-not-found') return;
+      throw friendly(err, 'No se pudo enviar el correo de recuperación.');
     }
   },
 
-  /**
-   * Sign out from Firebase
-   */
   async signOut(): Promise<void> {
-    try {
-      const auth = getFirebaseAuth();
-      await fbSignOut(auth);
-    } catch {
-      // ignore
-    }
+    await signOut(getFirebaseAuth()).catch(() => {});
   },
 };
