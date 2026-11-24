@@ -38,6 +38,23 @@ function friendly(err: unknown, fallback: string): Error {
   return err instanceof Error && err.message ? err : new Error(fallback);
 }
 
+let inflightProfilePromise: Promise<Profile> | null = null;
+
+async function fetchProfileWithRetry(): Promise<Profile> {
+  if (inflightProfilePromise) return inflightProfilePromise;
+  inflightProfilePromise = (async () => {
+    try {
+      return await apiClient<Profile>('/users/me');
+    } catch {
+      await new Promise((r) => setTimeout(r, 400));
+      return await apiClient<Profile>('/users/me');
+    } finally {
+      inflightProfilePromise = null;
+    }
+  })();
+  return inflightProfilePromise;
+}
+
 /**
  * The role always comes from the backend. If the backend cannot be reached the session is
  * still created as a citizen (least privilege), never as staff.
@@ -45,7 +62,7 @@ function friendly(err: unknown, fallback: string): Error {
 async function toSession(user: FirebaseUser): Promise<Session> {
   const fallbackName = user.displayName || user.email?.split('@')[0] || 'Usuario';
   try {
-    const p = await apiClient<Profile>('/users/me');
+    const p = await fetchProfileWithRetry();
     return { uid: user.uid, email: p.email || user.email || '', displayName: p.displayName || fallbackName, role: p.role || 'citizen' };
   } catch {
     return { uid: user.uid, email: user.email || '', displayName: fallbackName, role: 'citizen' };
@@ -82,7 +99,20 @@ export const authService = {
     assertEmail(email);
     if (password.length < MIN_PASSWORD) throw new Error(FIREBASE_ERRORS['auth/weak-password']);
     try {
-      const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
+      } catch (createErr: any) {
+        if (createErr?.code === 'auth/email-already-in-use') {
+          try {
+            cred = await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
+          } catch {
+            throw createErr;
+          }
+        } else {
+          throw createErr;
+        }
+      }
       const name = displayName?.trim() || email.trim().split('@')[0];
       await updateProfile(cred.user, { displayName: name }).catch(() => {});
       // Refresh the token so the backend receives the new display name.

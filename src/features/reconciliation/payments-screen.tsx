@@ -114,7 +114,7 @@ export function PaymentsScreen() {
           </View>
         }
         ListEmptyComponent={
-          loading ? null : (
+          loading ? undefined : (
             <EmptyState
               title="No encontramos pagos"
               body={q ? `Ningún pago coincide con “${q.trim()}” en este filtro.` : 'No hay pagos con este estado.'}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,9 +32,9 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
   const loc = useLocationPicker(clearAddrError);
   const { photos, add, remove } = usePhotoAttachments();
 
-  const scrollRef = useRef<ScrollView>(null);
-  const addrRef = useRef<TextInput>(null);
-  const descRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const addrRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const descRef = useRef<ComponentRef<typeof TextInput>>(null);
   const positions = useRef({ addr: 0, desc: 0 });
 
   const submit = async () => {
