@@ -36,7 +36,15 @@ export function useSessionData<T>(uid: string | null, load: () => Promise<Loaded
   }, [uid, load]);
 
   const current = uid !== null && state.owner === uid;
-  const update = useCallback((fn: (items: T) => T) => setState((s) => ({ ...s, items: fn(s.items) })), []);
+  const update = useCallback(
+    (fn: (items: T) => T, nextSource?: DataSource) =>
+      setState((s) => ({
+        ...s,
+        items: fn(s.items),
+        ...(nextSource ? { source: nextSource, reason: nextSource === 'api' ? undefined : s.reason } : {}),
+      })),
+    [],
+  );
 
   return {
     items: current ? state.items : empty,

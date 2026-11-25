@@ -14,10 +14,60 @@ export interface Transaction {
   ciudadano: string;
   metodoPago: string;
   banco: string;
+  reconciledAt?: string | null;
+  reconciliationReason?: string | null;
+  reconciliationNotes?: string | null;
+}
+
+export interface RigorousReconcilePayload {
+  reason: string;
+  bankReference: string;
+  verifiedBankAmount: number;
+  evidenceFolio: string;
+  notes: string;
+  receiptPhoto?: string | PhotoAttachment | null;
+}
+
+export type DebtStatus = 'pending' | 'paid' | 'overdue';
+
+export interface CitizenDebt {
+  id: string;
+  folio: string;
+  concept: string;
+  amount: number;
+  dueDate: string;
+  status: DebtStatus;
+  serviceSlug: Servicio;
+  serviceName: string;
+}
+
+export interface MunicipalCitizenData {
+  cadastralKey?: string;
+  propertyAddress?: string;
+  propertyType?: 'Urbano' | 'Rústico';
+  waterAccount?: string;
+  vehiclePlates?: string;
+  driverLicense?: string;
 }
 
 export type ReportEstado = 'Nuevo' | 'En proceso' | 'Asignado' | 'Resuelto';
 export type ReportPrioridad = 'Alta' | 'Media' | 'Baja';
+
+export interface PhotoAttachment {
+  uri: string;
+  base64?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+}
+
+export interface ReportHistoryEntry {
+  id: string;
+  previousStatus: string;
+  newStatus: string;
+  notes?: string | null;
+  date: string;
+  changedBy: string;
+}
 
 export interface Report {
   id: string;
@@ -26,14 +76,21 @@ export interface Report {
   date: string;
   estado: ReportEstado;
   categoria: string;
+  department?: string | null;
+  departamentoNombre?: string | null;
   prioridad: ReportPrioridad;
   icon: string;
   description?: string;
-  /** Cloudinary URLs of the evidence photos. */
   fotos?: string[];
-  /** Pin chosen on the map, when the citizen marked one. */
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt?: string;
+  user?: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
+  history?: ReportHistoryEntry[];
 }
 
 export interface NewReportInput {
@@ -42,8 +99,7 @@ export interface NewReportInput {
   prioridad: ReportPrioridad;
   direccion: string;
   descripcion: string;
-  fotos: string[];
-  /** Optional pin from the map (OpenStreetMap). The backend DTO already accepts these fields. */
+  fotos: (string | PhotoAttachment)[];
   latitude?: number;
   longitude?: number;
 }
@@ -51,8 +107,18 @@ export interface NewReportInput {
 export interface Session {
   email: string;
   displayName: string;
-  /** Server-verified role (users.role). */
   role: string;
+  department?: string | null;
+  municipalData?: MunicipalCitizenData | null;
   uid: string;
 }
 
+export interface ManagedUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  department?: string | null;
+  phone?: string | null;
+  createdAt?: string;
+}

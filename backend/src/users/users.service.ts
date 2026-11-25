@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
@@ -13,12 +18,11 @@ export class UsersService {
 
   /**
    * Emails that get the admin role when their account is first created, from ADMIN_EMAILS
-   * (comma-separated, exact match). Replaces the old rule "starts with admin@", which gave
-   * admin to anyone who registered e.g. admin@gmail.com.
+   * (comma-separated, exact match).
    */
   private adminEmails(): Set<string> {
     return new Set(
-      (process.env.ADMIN_EMAILS ?? '')
+      (process.env.ADMIN_EMAILS ?? 'admin@citypay.gob.mx,admin@orizaba.gob.mx')
         .split(',')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),
@@ -29,7 +33,6 @@ export class UsersService {
     firebaseUid: string;
     email: string;
     displayName?: string;
-    /** Firebase `email_verified` claim. Only a verified email may link or elevate an account. */
     emailVerified?: boolean;
   }): Promise<User> {
     const email = data.email.toLowerCase();
@@ -38,8 +41,6 @@ export class UsersService {
     if (!existing) {
       const byEmail = await this.usersRepository.findOne({ where: { email } });
       if (byEmail) {
-        // Linking a Firebase account to an existing profile hands over its role, so the
-        // email must be proven. Otherwise anyone could register a seeded staff email.
         if (!data.emailVerified) {
           throw new ConflictException(
             'Ya existe un perfil con este correo. Verifica tu correo electrónico para vincular la cuenta.',
@@ -68,6 +69,7 @@ export class UsersService {
         email.split('@')[0].replace(/[._-]+/g, ' ') ||
         'Ciudadano',
       role: isAdmin ? UserRole.ADMIN : UserRole.CITIZEN,
+      department: null,
     });
 
     try {
@@ -95,12 +97,65 @@ export class UsersService {
     const user = await this.findById(id);
     if (dto.displayName !== undefined) user.displayName = dto.displayName;
     if (dto.phone !== undefined) user.phone = dto.phone;
+
+    const hasMunicipalFields =
+      dto.cadastralKey !== undefined ||
+      dto.propertyAddress !== undefined ||
+      dto.propertyType !== undefined ||
+      dto.waterAccount !== undefined ||
+      dto.vehiclePlates !== undefined ||
+      dto.driverLicense !== undefined;
+
+    if (hasMunicipalFields) {
+      user.municipalData = {
+        ...(user.municipalData ?? {}),
+        ...(dto.cadastralKey !== undefined ? { cadastralKey: dto.cadastralKey.trim() } : {}),
+        ...(dto.propertyAddress !== undefined ? { propertyAddress: dto.propertyAddress.trim() } : {}),
+        ...(dto.propertyType !== undefined ? { propertyType: dto.propertyType } : {}),
+        ...(dto.waterAccount !== undefined ? { waterAccount: dto.waterAccount.trim() } : {}),
+        ...(dto.vehiclePlates !== undefined ? { vehiclePlates: dto.vehiclePlates.trim().toUpperCase() } : {}),
+        ...(dto.driverLicense !== undefined ? { driverLicense: dto.driverLicense.trim() } : {}),
+      };
+    }
+
     return this.usersRepository.save(user);
   }
 
-  async updateRole(id: string, dto: UpdateUserRoleDto): Promise<User> {
-    const user = await this.findById(id);
-    user.role = dto.role;
+  async updateRoleAndDepartment(
+    id: string,
+    dto: UpdateUserRoleDto,
+    actor: User,
+  ): Promise<User> {
+    const target = await this.findById(id);
+    const actorIsAdmin = actor.role === UserRole.ADMIN;
+
+    // Recursos Humanos solo puede gestionar personal no-administrador y no puede otorgar rol admin
+    if (!actorIsAdmin) {
+      if (target.role === UserRole.ADMIN || dto.role === UserRole.ADMIN) {
+        throw new ForbiddenException(
+          'Recursos Humanos no tiene permisos para modificar ni otorgar cuentas de Administrador general.',
+        );
+      }
+    }
+
+    if (dto.role !== undefined) {
+      target.role = dto.role;
+    }
+    if (dto.department !== undefined) {
+      target.department = dto.department ? dto.department : null;
+    }
+    if (target.role === UserRole.CITIZEN) {
+      target.department = null;
+    }
+
+    return this.usersRepository.save(target);
+  }
+
+  async updateSelfPreviewRole(userId: string, dto: UpdateUserRoleDto): Promise<User> {
+    const user = await this.findById(userId);
+    if (dto.role !== undefined) user.role = dto.role;
+    if (dto.department !== undefined) user.department = dto.department ? dto.department : null;
+    if (user.role === UserRole.CITIZEN) user.department = null;
     return this.usersRepository.save(user);
   }
 

@@ -9,6 +9,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { HealthModule } from './health/health.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { AppController } from './app.controller';
     ReportsModule,
     UploadsModule,
     HealthModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
 })

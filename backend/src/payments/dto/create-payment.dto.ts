@@ -22,6 +22,10 @@ export class SimulatePaymentDto {
   bank?: string;
 
   @IsOptional()
+  @IsString()
+  bankReference?: string;
+
+  @IsOptional()
   @IsUUID('4', { message: 'El debtId debe ser un UUID válido.' })
   debtId?: string;
 }

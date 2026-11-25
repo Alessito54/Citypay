@@ -37,3 +37,19 @@ export function filterReports(reports: Report[], f: ReportFilters) {
 export function activeFilterCount(f: ReportFilters) {
   return [f.categoria !== 'Todos', f.estado !== 'Todos', f.prioridad !== 'Todas', f.q.trim() !== ''].filter(Boolean).length;
 }
+
+export function hasActiveFilters(f: ReportFilters) {
+  return activeFilterCount(f) > 0;
+}
+
+export function countByStatus(reports: Report[]) {
+  let fresh = 0;
+  let open = 0;
+  let done = 0;
+  for (const r of reports) {
+    if (r.estado === 'Nuevo') fresh += 1;
+    else if (r.estado === 'Resuelto') done += 1;
+    else open += 1;
+  }
+  return { fresh, open, done };
+}

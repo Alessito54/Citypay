@@ -1,36 +1,59 @@
 import { isDemoId, type Loaded } from '@/lib/data-source';
-import type { Transaction } from '@/types';
+import type { RigorousReconcilePayload, Transaction } from '@/types';
 
-import { apiClient } from './api-client';
+import { ApiError, apiClient } from './api-client';
 import { DEMO_TRANSACTIONS } from './demo-data';
+import { uploadPhoto } from './uploads-service';
 
-export interface ForceReconcileInput {
+export interface ForceReconcileInput extends RigorousReconcilePayload {
   transactionId: string;
-  reason: string;
-  notes: string;
 }
 
 export const reconciliationService = {
-  /** Payments from the API (staff only). Falls back to demo data when the API cannot be used. */
   async listTransactions(): Promise<Loaded<Transaction[]>> {
     try {
       return { items: await apiClient<Transaction[]>('/payments'), source: 'api' };
     } catch (err) {
-      return { items: DEMO_TRANSACTIONS, source: 'demo', reason: err instanceof Error ? err.message : undefined };
+      const reason =
+        err instanceof ApiError && err.statusCode === 403
+          ? 'Vista previa de demostración: tu cuenta en el servidor está registrada como ciudadano.'
+          : err instanceof Error
+            ? err.message
+            : 'Sin conexión temporal con el servidor.';
+      return { items: DEMO_TRANSACTIONS, source: 'demo', reason };
     }
   },
 
   /**
-   * Records a manual reconciliation in the audit trail. Errors propagate: the previous
-   * version swallowed them and showed "conciliado" even when the server had refused it.
-   * Demo records only change on this device.
+   * Registra un dictamen riguroso de conciliación bancaria con referencia verificada,
+   * monto real en estado de cuenta, folio de póliza/respaldo y observaciones auditables.
    */
   async forceReconcile(input: ForceReconcileInput): Promise<Transaction | null> {
-    if (!input.reason) throw new Error('Selecciona un motivo.');
+    if (!input.reason) throw new Error('Selecciona el motivo del dictamen.');
+    let receiptUrl: string | undefined;
+    if (input.receiptPhoto) {
+      receiptUrl = await uploadPhoto(input.receiptPhoto);
+    }
+
     if (isDemoId(input.transactionId)) return null;
+
+    const enrichedNotes = [
+      `[Ref. verificada: ${input.bankReference.trim().toUpperCase()}]`,
+      `[Importe banco: $${input.verifiedBankAmount.toFixed(2)} MXN]`,
+      `[Póliza/Acta: ${input.evidenceFolio.trim().toUpperCase()}]`,
+      input.notes.trim(),
+    ].join(' · ');
+
     return apiClient<Transaction>(`/payments/${input.transactionId}/reconcile`, {
       method: 'POST',
-      body: { reason: input.reason, notes: input.notes },
+      body: {
+        reason: input.reason,
+        bankReference: input.bankReference.trim().toUpperCase(),
+        verifiedBankAmount: input.verifiedBankAmount,
+        evidenceFolio: input.evidenceFolio.trim().toUpperCase(),
+        notes: enrichedNotes,
+        receiptUrl,
+      },
     });
   },
 };

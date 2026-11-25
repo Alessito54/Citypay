@@ -1,17 +1,12 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 
-import { C, FONT, RADIUS } from '@/constants/colors';
+import { FONT, RADIUS } from '@/constants/colors';
+import { useTheme } from '@/features/theme/theme-context';
 
 import { Icon, type IconName } from '../icon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'quiet';
 
-/**
- * The only button style in the app. Variants:
- * - primary: the main action of a screen or sheet (filled).
- * - secondary: alternative action (outlined).
- * - quiet: cancel / dismiss (neutral outline).
- */
 export function Button({
   label,
   variant = 'primary',
@@ -33,9 +28,29 @@ export function Button({
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { dark, colors } = useTheme();
   const inactive = disabled || loading;
-  const v = VARIANTS[variant];
-  const fg = disabled && !loading ? C.disabledText : v.fg;
+
+  const variants = {
+    primary: {
+      box: { backgroundColor: colors.blue, borderColor: colors.blue },
+      pressed: { backgroundColor: dark ? colors.blueMid : colors.navy },
+      fg: dark ? '#0B1220' : '#FFFFFF',
+    },
+    secondary: {
+      box: { backgroundColor: colors.white, borderColor: colors.blue },
+      pressed: { backgroundColor: colors.blueSoft },
+      fg: colors.blue,
+    },
+    quiet: {
+      box: { backgroundColor: colors.white, borderColor: colors.inputBorder },
+      pressed: { backgroundColor: colors.screen },
+      fg: colors.text1,
+    },
+  } as const;
+
+  const v = variants[variant];
+  const fg = disabled && !loading ? colors.disabledText : v.fg;
   return (
     <Pressable
       accessibilityRole="button"
@@ -48,7 +63,7 @@ export function Button({
         s.base,
         v.box,
         pressed && v.pressed,
-        disabled && !loading && s.disabled,
+        disabled && !loading && { backgroundColor: colors.disabledBg, borderColor: colors.disabledBg },
         style,
       ]}>
       {loading ? <ActivityIndicator color={fg} size="small" /> : icon ? <Icon name={icon} size={18} color={fg} strokeWidth={2.2} /> : null}
@@ -56,12 +71,6 @@ export function Button({
     </Pressable>
   );
 }
-
-const VARIANTS = {
-  primary: { box: { backgroundColor: C.blue, borderColor: C.blue }, pressed: { backgroundColor: C.navy }, fg: '#fff' },
-  secondary: { box: { backgroundColor: '#fff', borderColor: C.blue }, pressed: { backgroundColor: C.blueSoft }, fg: C.blue },
-  quiet: { box: { backgroundColor: '#fff', borderColor: C.inputBorder }, pressed: { backgroundColor: C.screen }, fg: C.text1 },
-} as const;
 
 const s = StyleSheet.create({
   base: {
@@ -74,6 +83,5 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  disabled: { backgroundColor: C.disabledBg, borderColor: C.disabledBg },
   text: { fontFamily: FONT.sansBold, fontSize: 15, flexShrink: 1, textAlign: 'center' },
 });

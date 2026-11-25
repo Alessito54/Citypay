@@ -52,6 +52,10 @@ export class CitizenReport {
   @Column({ type: 'varchar', length: 100 })
   category: string;
 
+  @Index()
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  department: string | null;
+
   @Column({
     type: 'enum',
     enum: ReportPriority,

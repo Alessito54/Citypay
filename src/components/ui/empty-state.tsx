@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { C, FONT, RADIUS } from '@/constants/colors';
+import { FONT, RADIUS } from '@/constants/colors';
+import { useTheme } from '@/features/theme/theme-context';
 
 import { Icon } from '../icon';
 import { Button } from './button';
 
-/** Empty list placeholder with an optional recovery action (e.g. clear filters). */
 export function EmptyState({
   title,
   body,
@@ -17,13 +17,14 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const { colors } = useTheme();
   return (
     <View style={s.empty} accessibilityLiveRegion="polite">
-      <View style={s.icon}>
-        <Icon name="search" size={22} color={C.blue} />
+      <View style={[s.icon, { backgroundColor: colors.blueIcon }]}>
+        <Icon name="search" size={22} color={colors.blue} />
       </View>
-      <Text style={s.title}>{title}</Text>
-      {body ? <Text style={s.body}>{body}</Text> : null}
+      <Text style={[s.title, { color: colors.text1 }]}>{title}</Text>
+      {body ? <Text style={[s.body, { color: colors.text2 }]}>{body}</Text> : null}
       {actionLabel && onAction ? <Button variant="secondary" label={actionLabel} onPress={onAction} style={{ marginTop: 8 }} /> : null}
     </View>
   );
@@ -31,7 +32,7 @@ export function EmptyState({
 
 const s = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24, gap: 6 },
-  icon: { width: 48, height: 48, borderRadius: RADIUS, backgroundColor: C.blueIcon, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  title: { fontFamily: FONT.sansBold, fontSize: 15, color: C.text1, textAlign: 'center' },
-  body: { fontFamily: FONT.sans, fontSize: 13.5, color: C.text2, textAlign: 'center', lineHeight: 19 },
+  icon: { width: 48, height: 48, borderRadius: RADIUS, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  title: { fontFamily: FONT.sansBold, fontSize: 15, textAlign: 'center' },
+  body: { fontFamily: FONT.sans, fontSize: 13.5, textAlign: 'center', lineHeight: 19 },
 });

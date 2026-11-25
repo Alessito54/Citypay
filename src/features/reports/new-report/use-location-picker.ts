@@ -1,8 +1,9 @@
 import * as Location from 'expo-location';
 import { useState } from 'react';
-import { AccessibilityInfo, Alert, Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import type { MessageTone } from '@/components/ui';
+import { notifyUser } from '@/lib/alerts';
 import { fmtCoords, geocoding, type Coords } from '@/services/geocoding';
 
 export type MapNote = { text: string; tone: MessageTone } | null;
@@ -60,7 +61,7 @@ export function useLocationPicker(onAddressResolved: () => void) {
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permiso requerido', 'Concede acceso a la ubicación para usar esta opción, o escribe la dirección.');
+        notifyUser('Permiso requerido', 'Concede acceso a la ubicación para usar esta opción, o escribe la dirección.');
         setBusy(null);
         return;
       }
@@ -70,7 +71,7 @@ export function useLocationPicker(onAddressResolved: () => void) {
       await fillFrom(c, 'gps');
     } catch {
       setBusy(null);
-      Alert.alert('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección o toca el mapa.');
+      notifyUser('Ubicación', 'No se pudo obtener tu ubicación actual. Escribe la dirección o toca el mapa.');
     }
   };
 

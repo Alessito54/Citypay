@@ -12,8 +12,8 @@
 
 export const MAP_SOURCE = 'citypay-map';
 
-/** Fallback center when there is no pin yet (Zócalo, Ciudad de México). Change it to the municipality. */
-export const DEFAULT_CENTER = { latitude: 19.4326, longitude: -99.1332 };
+/** Centro inicial cuando aún no hay marcador: Palacio Municipal de Orizaba, Veracruz. */
+export const DEFAULT_CENTER = { latitude: 18.8505, longitude: -97.1036 };
 
 /** Origin the page runs on inside the WebView, so OSM tile requests carry a Referer identifying the app. */
 export const MAP_BASE_URL = 'https://github.com/Alessito54/Citypay';

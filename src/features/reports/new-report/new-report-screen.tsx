@@ -2,8 +2,9 @@ import { type ComponentRef, useRef, useState } from 'react';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, FieldMessage, SelectField, SheetHeader, inputError } from '@/components/ui';
+import { Badge, Button, FieldMessage, SelectField, SheetHeader, inputError } from '@/components/ui';
 import { C, FONT, RADIUS } from '@/constants/colors';
+import { getDepartment, resolveDepartmentForReport } from '@/lib/orizaba';
 import type { ReportPrioridad } from '@/types';
 
 import { useReports } from '../reports-context';
@@ -17,12 +18,11 @@ import { usePhotoAttachments } from './use-photo-attachments';
 
 type SendState = 'idle' | 'sending' | 'sent';
 
-/** Composes the form sections; state lives in the hooks and rules in report-form.ts. */
 export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent: () => void }) {
   const insets = useSafeAreaInsets();
   const { submitReport } = useReports();
-  const [cat, setCat] = useState('Alumbrado público');
-  const [prob, setProb] = useState(PROBLEMAS['Alumbrado público'][0]);
+  const [cat, setCat] = useState('Vialidad');
+  const [prob, setProb] = useState(PROBLEMAS.Vialidad[0]);
   const [pri, setPri] = useState<ReportPrioridad>('Media');
   const [desc, setDesc] = useState('');
   const [state, setState] = useState<SendState>('idle');
@@ -30,18 +30,19 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
   const [mapTouch, setMapTouch] = useState(false);
   const clearAddrError = () => setErrors((e) => ({ ...e, addr: undefined }));
   const loc = useLocationPicker(clearAddrError);
-  const { photos, add, remove } = usePhotoAttachments();
+  const { photos, photoError, add, remove } = usePhotoAttachments();
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const addrRef = useRef<ComponentRef<typeof TextInput>>(null);
   const descRef = useRef<ComponentRef<typeof TextInput>>(null);
   const positions = useRef({ addr: 0, desc: 0 });
 
+  const targetDept = getDepartment(resolveDepartmentForReport(cat, prob));
+
   const submit = async () => {
     const e = validateReport(loc.addr, desc);
     setErrors(e);
     if (e.addr || e.desc) {
-      // The submit button is far from the fields: bring the first invalid one into view.
       scrollRef.current?.scrollTo({ y: Math.max(0, (e.addr ? positions.current.addr : positions.current.desc) - 12), animated: true });
       (e.addr ? addrRef : descRef).current?.focus();
       AccessibilityInfo.announceForAccessibility(`Falta información. ${e.addr ?? e.desc}`);
@@ -60,8 +61,8 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
         longitude: loc.coords?.longitude,
       });
       setState('sent');
-      AccessibilityInfo.announceForAccessibility('Reporte enviado. Te llevaremos a la lista de reportes.');
-      setTimeout(onSent, 1600);
+      AccessibilityInfo.announceForAccessibility('Reporte enviado. Se notificó en tiempo real a la coordinación correspondiente.');
+      setTimeout(onSent, 1400);
     } catch (err) {
       setState('idle');
       setErrors({ send: err instanceof Error ? err.message : 'No se pudo enviar el reporte. Inténtalo de nuevo.' });
@@ -73,11 +74,13 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={{ paddingTop: insets.top + 4 }}>
-        <SheetHeader title="Nuevo reporte" back onClose={onBack} closeLabel="Volver" />
+        <SheetHeader title="Nuevo reporte ciudadano" back onClose={onBack} closeLabel="Volver" />
       </View>
 
       <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" scrollEnabled={!mapTouch} contentContainerStyle={s.body}>
-        <Text style={s.sub}>Cuéntanos qué pasa y dónde. Los campos marcados como obligatorios son necesarios para enviarlo.</Text>
+        <Text style={s.sub}>
+          Cuéntanos qué ocurre y dónde. Tu reporte y sus fotografías se envían en tiempo real al área encargada de resolverlo.
+        </Text>
 
         <FormGroup label="¿Qué tipo de problema es?" required>
           <SelectField
@@ -92,6 +95,14 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
             }}
           />
           <SelectField variant="row" label="Problema" leftIcon="warn" value={prob} options={PROBLEMAS[cat]} onChange={setProb} />
+          {targetDept ? (
+            <View style={s.routingBox}>
+              <Badge label={`Se turna a: ${targetDept.shortName}`} symbol="→" bg={C.blueSoft} fg={C.blue} />
+              <Text style={s.routingText}>
+                {targetDept.name} · Ext. {targetDept.extension}
+              </Text>
+            </View>
+          ) : null}
         </FormGroup>
 
         <FormGroup label="Prioridad" required>
@@ -116,7 +127,7 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
               accessibilityLabel={`Descripción del problema, obligatorio, mínimo ${MIN_DESC} caracteres`}
               maxLength={MAX_DESC}
               multiline
-              placeholder="Ej.: La lámpara no enciende desde hace varios días. Está frente al parque."
+              placeholder="Ej.: Bache profundo sobre el carril derecho frente al núm. 214, dificulta el paso vehicular."
               placeholderTextColor={C.text3}
               textAlignVertical="top"
               style={[s.desc, errors.desc ? inputError : null]}
@@ -134,16 +145,24 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
         </View>
 
         <FormGroup label={`Fotos de evidencia (${photos.length}/${MAX_PHOTOS})`} optional>
-          <PhotoSection photos={photos} onAdd={add} onRemove={remove} />
+          <PhotoSection photos={photos} error={photoError} onAdd={add} onRemove={remove} />
         </FormGroup>
       </ScrollView>
 
       <View style={[s.footer, { paddingBottom: 12 + insets.bottom }]}>
         <FieldMessage text={errors.send} />
-        <FieldMessage text={state === 'sent' ? 'Reporte enviado. Te llevamos a la lista de reportes…' : null} tone="success" />
+        <FieldMessage text={state === 'sent' ? 'Reporte enviado en tiempo real. Volviendo a tus reportes…' : null} tone="success" />
         <Button
           icon={state === 'sent' ? 'check' : 'send'}
-          label={state === 'sent' ? 'Enviado' : state === 'sending' ? (photos.length ? 'Subiendo fotos y enviando…' : 'Enviando…') : 'Enviar reporte'}
+          label={
+            state === 'sent'
+              ? 'Enviado'
+              : state === 'sending'
+                ? photos.length
+                  ? `Subiendo ${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'} y enviando…`
+                  : 'Enviando reporte…'
+                : 'Enviar reporte'
+          }
           accessibilityLabel="Enviar reporte"
           onPress={submit}
           disabled={state === 'sent'}
@@ -158,6 +177,8 @@ export function NewReportScreen({ onBack, onSent }: { onBack: () => void; onSent
 const s = StyleSheet.create({
   body: { padding: 18, gap: 20, paddingBottom: 28 },
   sub: { fontFamily: FONT.sans, fontSize: 14.5, color: C.text2, lineHeight: 20 },
+  routingBox: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  routingText: { fontFamily: FONT.sans, fontSize: 12.5, color: C.text2 },
   desc: { minHeight: 110, padding: 12, borderRadius: RADIUS, borderWidth: 1, borderColor: C.inputBorder, fontFamily: FONT.sans, fontSize: 16, lineHeight: 22, color: C.text1, backgroundColor: '#fff' },
   descMeta: { flexDirection: 'row', justifyContent: 'space-between' },
   meta: { fontFamily: FONT.sansSemi, fontSize: 12.5, color: C.text2 },
