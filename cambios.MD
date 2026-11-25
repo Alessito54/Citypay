@@ -64,3 +64,5 @@ Este documento registra de forma ordenada todos los requerimientos atendidos y l
     - Se validó el proyecto completo sin errores (`tsc --noEmit`, `eslint .` y `nest build`) y se fusionaron todos los cambios de las Etapas 2, 3 y 4 en `main` sin conflictos, habilitando el despliegue automático del backend actualizado en Render.
 20. **Actualización completa de `README.md`** (`README.md`):
     - Se reemplazó la plantilla inicial de Expo por la documentación oficial de **CityPay**, detallando funcionalidades ciudadanas y administrativas, stack tecnológico (Expo SDK 58 / NestJS), estructura del repositorio, comandos de ejecución/validación y enlace directo a `cambios.MD`.
+21. **Íconos oficiales del logo CityPay y compilación de APK con EAS Build** (`assets/images/icon.png`, `assets/images/android-icon-*.png`, `assets/images/splash-icon.png`, `app.json`, `eas.json`):
+    - Se generaron los íconos vectoriales oficiales de CityPay (ícono principal 1024×1024, ícono adaptativo/monocromático de Android, splash y favicon), se configuró `android.package` (`com.citypay.municipal`) y se habilitó `eas.json` con perfil `preview` para generar el APK instalable.
