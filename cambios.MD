@@ -60,3 +60,5 @@ Este documento registra de forma ordenada todos los requerimientos atendidos y l
     - Se corrigió el error `ExpoSharing.shareAsync: Not allowed to read file under given URL` en Expo Go Android agregando respaldo automático a `Print.printAsync({ html })` (vista previa nativa de impresión / Guardar como PDF).
 18. **Corrección de modo oscuro en el Dictamen de Conciliación y hoja de Datos Municipales** (`src/features/reconciliation/force-reconcile-form.tsx`, `src/features/citizen-payments/municipal-data-sheet.tsx`):
     - Se migraron todos los textos, campos `TextInput`, banner superior, barra de ajuste bancario, casillas de auditoría y pie de acciones a `useTheme()` para asegurar contraste total en modo oscuro.
+19. **Integración y despliegue en rama principal (`PR #6`)** (`https://github.com/Alessito54/Citypay/pull/6`, commit `33489a6`):
+    - Se validó el proyecto completo sin errores (`tsc --noEmit`, `eslint .` y `nest build`) y se fusionaron todos los cambios de las Etapas 2, 3 y 4 en `main` sin conflictos, habilitando el despliegue automático del backend actualizado en Render.
