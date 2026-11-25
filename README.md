@@ -61,19 +61,9 @@ ProyectoCityPay/
 
 ---
 
-## Configuración e inicio rápido
+## Inicio rápido
 
-### 1. Variables de entorno
-
-**Cliente (`.env.local` en la raíz del proyecto):**
-Copia `.env.example` a `.env.local` y configura las variables públicas `EXPO_PUBLIC_*` (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_FIREBASE_*` y `EXPO_PUBLIC_CLOUDINARY_*`).
-
-**Backend (`backend/.env`):**
-Configura las credenciales exclusivas del servidor (`DATABASE_URL`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CORS_ORIGINS`, `PORT`).
-
-> **Seguridad:** nunca agregues `DATABASE_URL`, `CLOUDINARY_API_SECRET` ni `FIREBASE_PRIVATE_KEY` al archivo `.env.local` del cliente ni al repositorio Git.
-
-### 2. Instalación y ejecución
+### 1. Instalación y ejecución
 
 ```bash
 # Instalar dependencias del cliente
@@ -91,7 +81,7 @@ npm install
 npm run start:dev
 ```
 
-### 3. Validación y calidad de código
+### 2. Validación y calidad de código
 
 ```bash
 # Verificación de tipos TypeScript (cliente)

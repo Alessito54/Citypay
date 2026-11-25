@@ -63,4 +63,4 @@ Este documento registra de forma ordenada todos los requerimientos atendidos y l
 19. **Integración y despliegue en rama principal (`PR #6`)** (`https://github.com/Alessito54/Citypay/pull/6`, commit `33489a6`):
     - Se validó el proyecto completo sin errores (`tsc --noEmit`, `eslint .` y `nest build`) y se fusionaron todos los cambios de las Etapas 2, 3 y 4 en `main` sin conflictos, habilitando el despliegue automático del backend actualizado en Render.
 20. **Actualización completa de `README.md`** (`README.md`):
-    - Se reemplazó la plantilla inicial de Expo por la documentación oficial de **CityPay**, detallando funcionalidades ciudadanas y administrativas, stack tecnológico (Expo SDK 58 / NestJS), estructura del repositorio, variables de entorno, comandos de ejecución/validación y enlace directo a `cambios.MD`.
+    - Se reemplazó la plantilla inicial de Expo por la documentación oficial de **CityPay**, detallando funcionalidades ciudadanas y administrativas, stack tecnológico (Expo SDK 58 / NestJS), estructura del repositorio, comandos de ejecución/validación y enlace directo a `cambios.MD`.
