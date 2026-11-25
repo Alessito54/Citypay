@@ -1,72 +1,111 @@
-# Welcome to your Expo app 👋
+# CityPay — Portal Municipal de Pagos, Reportes y Conciliación Bancaria
 
-## Environment configuration
+**CityPay** es una aplicación multiplataforma (**iOS, Android y Web**) construida con **Expo SDK 58 / React Native 0.88** y un backend en **NestJS + PostgreSQL (Neon) + Firebase Auth + Cloudinary**. Conecta a los ciudadanos con las áreas operativas y administrativas del municipio para realizar pagos en línea, reportar incidencias urbanas con fotografía y ubicación, y conciliar operaciones bancarias de forma auditable.
 
-Copy `.env.example` to `.env.local` and fill in the Firebase project
-configuration. Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the
-client bundle.
+---
 
-The Neon connection string and Cloudinary API secret are server-only
-credentials. Do not add them to `.env.local`, application code, or an Expo
-build. Store them in the secret manager for the backend that will access
-PostgreSQL or sign Cloudinary uploads. The values previously shared for these
-services should be rotated before use.
+## Funcionalidades principales
 
-The current app still uses demo authentication and in-memory report and
-reconciliation services; adding environment variables does not enable those
-services automatically.
+### Portal Ciudadano
+- **Pagos municipales y adeudos («Cosas por pagar»):** consulta y liquidación de *Predial*, *Agua Potable* e *Infracciones de Tránsito* mediante tarjeta, SPEI o CoDi, además de buscador para vincular nuevos predios, contratos o boletas.
+- **Aval obligatorio de ubicación y datos del inmueble:** antes de confirmar pagos de *Predial* (y servicios asociados), el ciudadano valida clave catastral, titular, tipo de predio y ubicación exacta (con botón de detección GPS vía `expo-location`), guardando sus datos en el expediente municipal.
+- **Expediente municipal personal:** registro y edición de clave catastral, domicilio del predio, contrato de agua, placas vehiculares y licencia de conducir.
+- **Reportes urbanos con evidencia fotográfica y mapa:** captura de hasta 4 fotos (cámara o galería en móvil y web) subidas a Cloudinary, selección de ubicación en mapa y seguimiento del estatus.
+- **Guía rápida («¿Qué necesitas hacer hoy?»):** navegación intuitiva con accesos directos y directorio de áreas municipales.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+### Panel Administrativo y Tesorería
+- **Dictamen riguroso de conciliación bancaria en 3 pasos:**
+  1. *Cotejo contra estado de cuenta*: clave SPEI/referencia bancaria verificada, importe real acreditado con cálculo de variación en vivo, folio de póliza/corte y evidencia documental opcional.
+  2. *Clasificación contable*: motivo normativo y observaciones de auditoría obligatorias ($\ge 25$ caracteres).
+  3. *Protocolo de responsabilidad*: triple confirmación y código anti-error con los últimos 4 caracteres del folio.
+- **Generación de documentos PDF formales:** emisión de **Dictamen Formal de Conciliación de Pago** y **Comprobante Oficial de Pago Municipal** (`expo-print` + `expo-sharing`, con respaldo nativo a impresión/Guardar como PDF en Expo Go) incluyendo folio, cotejo financiero, datos avalados, firmas y sello digital de integridad.
+- **Sincronización automática en tiempo real:** canal `Server-Sent Events` (`GET /reports/stream`) respaldado por actualización silenciosa periódica entre dispositivos.
+- **Control de acceso por rol y coordinación:** permisos diferenciados para *Ciudadano*, *Personal de área*, *Supervisor / Contraloría* y *Administrador*, con panel de asignación de personal.
 
-## Get started
+### Experiencia de Usuario
+- **Modo oscuro (`Claro / Oscuro / Sistema`):** paleta oscura de alto contraste con persistencia local, selector en *Perfil* y botón rápido de cambio en la barra superior.
+- **Navegación por gestos:** deslizamiento horizontal animado entre pestañas (*Inicio, Pagos, Reportes, Guía y Perfil*).
+- **Animación de entrada rápida:** transición inicial centrada con el logotipo de CityPay (< 1 s).
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## Stack tecnológico
 
-2. Start the app
+| Capa | Tecnologías |
+| :--- | :--- |
+| **Frontend móvil / web** | Expo SDK 58, React Native 0.88, React 19.3, Expo Router, TypeScript, React Native Gesture Handler, `expo-print`, `expo-sharing`, `expo-location`, `expo-image-picker` |
+| **Backend API** | NestJS, TypeORM, PostgreSQL (Neon), Swagger (`/api/docs`), RxJS SSE |
+| **Autenticación y archivos** | Firebase Authentication (Web SDK + Admin SDK), Cloudinary |
+| **Despliegue** | Render (Backend API) · Netlify (Cliente Web) · Expo Go / EAS (Móvil) |
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## Estructura del repositorio
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+ProyectoCityPay/
+├── src/
+│   ├── app/                  # Rutas de Expo Router (tabs, login, new-report, loading)
+│   ├── components/           # Componentes UI reutilizables, íconos, marca y mapa
+│   ├── config/               # Configuración de Firebase cliente
+│   ├── constants/            # Tokens de diseño y paletas (clara y oscura)
+│   ├── features/             # Módulos: auth, citizen-payments, reconciliation, reports, orizaba (guía), profile, theme, shell
+│   ├── lib/                  # Reglas de roles, áreas municipales, alertas y hooks de datos
+│   └── services/             # Cliente HTTP, auth, reportes, pagos, PDF formal, tiempo real y uploads
+├── backend/
+│   └── src/                  # Módulos NestJS: auth, users, debts, payments, reports, services, uploads, realtime, database
+├── cambios.MD                # Bitácora cronológica de todos los cambios realizados
+├── app.json                  # Configuración de Expo y plugins nativos
+└── package.json              # Dependencias y scripts del cliente
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-### Other setup steps
+## Configuración e inicio rápido
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 1. Variables de entorno
 
-## Learn more
+**Cliente (`.env.local` en la raíz del proyecto):**
+Copia `.env.example` a `.env.local` y configura las variables públicas `EXPO_PUBLIC_*` (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_FIREBASE_*` y `EXPO_PUBLIC_CLOUDINARY_*`).
 
-To learn more about developing your project with Expo, look at the following resources:
+**Backend (`backend/.env`):**
+Configura las credenciales exclusivas del servidor (`DATABASE_URL`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CORS_ORIGINS`, `PORT`).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+> **Seguridad:** nunca agregues `DATABASE_URL`, `CLOUDINARY_API_SECRET` ni `FIREBASE_PRIVATE_KEY` al archivo `.env.local` del cliente ni al repositorio Git.
 
-## Join the community
+### 2. Instalación y ejecución
 
-Join our community of developers creating universal apps.
+```bash
+# Instalar dependencias del cliente
+npm install
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# Iniciar el servidor de desarrollo de Expo (Android, iOS y Web)
+npx expo start
+```
+
+Para ejecutar el backend de forma local:
+
+```bash
+cd backend
+npm install
+npm run start:dev
+```
+
+### 3. Validación y calidad de código
+
+```bash
+# Verificación de tipos TypeScript (cliente)
+npx tsc --noEmit
+
+# Linter ESLint (cliente)
+npx eslint .
+
+# Compilación del backend NestJS
+npm --prefix backend run build
+```
+
+---
+
+## Bitácora de cambios
+
+Consulta el historial detallado de cada mejora y corrección aplicada al proyecto en [cambios.MD](./cambios.MD).
