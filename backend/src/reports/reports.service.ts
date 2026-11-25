@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CitizenReport, ReportPriority, ReportStatus } from './entities/report.entity';
@@ -6,14 +6,19 @@ import { ReportImage } from './entities/report-image.entity';
 import { ReportStatusHistory } from './entities/report-status-history.entity';
 import { CreateReportDto, ReportImageDto } from './dto/create-report.dto';
 import { UpdateReportStatusDto } from './dto/update-report-status.dto';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
+import { getDepartmentDef, resolveDepartmentForReport } from '../auth/orizaba';
+import { canManageReport } from '../auth/roles';
 
 const ICONS: Record<string, string> = {
   'Alumbrado público': '💡',
   Vialidad: '🚧',
+  'Obras públicas y bacheo': '🚧',
+  'Tránsito y vialidad': '🚦',
   Agua: '💧',
   'Limpieza y residuos': '🗑️',
   'Parques y jardines': '🛝',
+  'Catastro y predial': '🏛️',
 };
 
 @Injectable()
@@ -26,6 +31,7 @@ export class ReportsService {
 
   async findAll(options?: {
     category?: string;
+    department?: string;
     status?: ReportStatus;
     priority?: ReportPriority;
     search?: string;
@@ -42,6 +48,10 @@ export class ReportsService {
 
     if (options?.category && options.category !== 'Todos') {
       query.andWhere('report.category = :category', { category: options.category });
+    }
+
+    if (options?.department && options.department !== 'Todos') {
+      query.andWhere('report.department = :department', { department: options.department });
     }
 
     if (options?.status && (options.status as any) !== 'Todos') {
@@ -99,12 +109,14 @@ export class ReportsService {
       .replace(/\./g, '');
 
     const icon = ICONS[dto.category] || '📋';
+    const department = resolveDepartmentForReport(dto.category, dto.title);
+    const deptName = getDepartmentDef(department)?.name || department;
 
-    // Use SQL Transaction for saving report, images, and history atomically
     return this.dataSource.transaction(async (manager) => {
       const report = manager.create(CitizenReport, {
         title: dto.title,
         category: dto.category,
+        department,
         priority: dto.priority,
         address: dto.address,
         description: dto.description,
@@ -118,23 +130,21 @@ export class ReportsService {
 
       const savedReport = await manager.save(CitizenReport, report);
 
-      // Save initial history record
       await manager.save(ReportStatusHistory, {
         reportId: savedReport.id,
         changedById: user.id,
         previousStatus: 'Creado',
         newStatus: ReportStatus.NUEVO,
-        notes: 'Reporte registrado por el ciudadano.',
+        notes: `Reporte registrado y turnado a ${deptName}.`,
       });
 
-      // Save images if any
       if (dto.images && dto.images.length > 0) {
-        const imageEntities = dto.images.map((img) => {
+        const imageEntities = dto.images.map((img, idx) => {
           if (typeof img === 'string') {
             return manager.create(ReportImage, {
               reportId: savedReport.id,
               secureUrl: img,
-              publicId: `reports/${savedReport.id}/${Date.now()}`,
+              publicId: `reports/${savedReport.id}/${Date.now()}_${idx}`,
             });
           }
           const item = img as ReportImageDto;
@@ -165,14 +175,39 @@ export class ReportsService {
   ): Promise<CitizenReport> {
     const report = await this.findById(id);
 
+    if (!canManageReport(changedBy, report.category, report.title, report.department)) {
+      throw new ForbiddenException(
+        'Tu coordinación solo puede actualizar el estado de los reportes ciudadanos asignados a tu área.',
+      );
+    }
+
+    if (
+      dto.department &&
+      dto.department !== report.department &&
+      changedBy.role !== UserRole.ADMIN &&
+      changedBy.role !== UserRole.MUNICIPAL_SUPERVISOR
+    ) {
+      throw new ForbiddenException(
+        'Solo un Supervisor municipal o Administrador general puede re-turnar un reporte a otra coordinación.',
+      );
+    }
+
     return this.dataSource.transaction(async (manager) => {
       const previousStatus = report.status;
       report.status = dto.status;
       if (dto.assignedToId) {
         report.assignedToId = dto.assignedToId;
       }
+      if (dto.department) {
+        report.department = dto.department;
+      }
 
-      const updated = await manager.save(CitizenReport, report);
+      // Clear loaded relations so TypeORM doesn't overwrite FK updates or re-insert images
+      delete (report as Partial<CitizenReport>).images;
+      delete (report as Partial<CitizenReport>).history;
+      delete (report as Partial<CitizenReport>).assignedTo;
+
+      await manager.save(CitizenReport, report);
 
       await manager.save(ReportStatusHistory, {
         reportId: report.id,
@@ -182,7 +217,11 @@ export class ReportsService {
         notes: dto.notes || `Estado actualizado a ${dto.status}.`,
       });
 
-      return updated;
+      const reloaded = await manager.findOne(CitizenReport, {
+        where: { id: report.id },
+        relations: { images: true, user: true, assignedTo: true },
+      });
+      return reloaded ?? report;
     });
   }
 }

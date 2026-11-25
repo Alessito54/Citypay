@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -7,6 +8,7 @@ import {
   updateProfile,
   type User as FirebaseUser,
 } from 'firebase/auth';
+import { Platform } from 'react-native';
 
 import { getFirebaseAuth } from '@/config/firebase';
 import { isEmail, MIN_PASSWORD } from '@/lib/validation';
@@ -19,6 +21,43 @@ interface Profile {
   email: string;
   displayName: string;
   role: string;
+  department?: string | null;
+}
+
+const PREVIEW_STORAGE_KEY = 'citypay_role_preview_v1';
+
+export interface RolePreviewOverride {
+  uid: string;
+  role: string;
+  department: string | null;
+}
+
+export async function saveRolePreviewOverride(override: RolePreviewOverride | null): Promise<void> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      if (!override) window.localStorage.removeItem(PREVIEW_STORAGE_KEY);
+      else window.localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(override));
+      return;
+    }
+    if (!override) await AsyncStorage.removeItem(PREVIEW_STORAGE_KEY);
+    else await AsyncStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(override));
+  } catch {
+    // non-blocking
+  }
+}
+
+async function readRolePreviewOverride(uid: string): Promise<RolePreviewOverride | null> {
+  try {
+    const raw =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem(PREVIEW_STORAGE_KEY)
+        : await AsyncStorage.getItem(PREVIEW_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RolePreviewOverride;
+    return parsed?.uid === uid ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 const FIREBASE_ERRORS: Record<string, string> = {
@@ -56,16 +95,29 @@ async function fetchProfileWithRetry(): Promise<Profile> {
 }
 
 /**
- * The role always comes from the backend. If the backend cannot be reached the session is
- * still created as a citizen (least privilege), never as staff.
+ * Construye la sesión verificando el rol y departamento en el backend.
+ * Si en desarrollo el usuario activó una simulación de rol/coordinación, la respeta.
  */
 async function toSession(user: FirebaseUser): Promise<Session> {
   const fallbackName = user.displayName || user.email?.split('@')[0] || 'Usuario';
+  const override = __DEV__ ? await readRolePreviewOverride(user.uid) : null;
   try {
     const p = await fetchProfileWithRetry();
-    return { uid: user.uid, email: p.email || user.email || '', displayName: p.displayName || fallbackName, role: p.role || 'citizen' };
+    return {
+      uid: user.uid,
+      email: p.email || user.email || '',
+      displayName: p.displayName || fallbackName,
+      role: override?.role ?? (p.role || 'citizen'),
+      department: override ? override.department : (p.department ?? null),
+    };
   } catch {
-    return { uid: user.uid, email: user.email || '', displayName: fallbackName, role: 'citizen' };
+    return {
+      uid: user.uid,
+      email: user.email || '',
+      displayName: fallbackName,
+      role: override?.role ?? 'citizen',
+      department: override ? override.department : null,
+    };
   }
 }
 
@@ -74,7 +126,6 @@ function assertEmail(email: string) {
 }
 
 export const authService = {
-  /** Restores the session on app launch and reports sign-in / sign-out. */
   subscribe(callback: (session: Session | null) => void): () => void {
     try {
       return onAuthStateChanged(getFirebaseAuth(), async (user) => callback(user ? await toSession(user) : null));
@@ -115,7 +166,6 @@ export const authService = {
       }
       const name = displayName?.trim() || email.trim().split('@')[0];
       await updateProfile(cred.user, { displayName: name }).catch(() => {});
-      // Refresh the token so the backend receives the new display name.
       await cred.user.getIdToken(true).catch(() => {});
       return await toSession(cred.user);
     } catch (err) {
@@ -128,13 +178,13 @@ export const authService = {
     try {
       await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
     } catch (err) {
-      // Do not reveal whether an account exists for this email.
       if ((err as { code?: string })?.code === 'auth/user-not-found') return;
       throw friendly(err, 'No se pudo enviar el correo de recuperación.');
     }
   },
 
   async signOut(): Promise<void> {
+    await saveRolePreviewOverride(null);
     await signOut(getFirebaseAuth()).catch(() => {});
   },
 };

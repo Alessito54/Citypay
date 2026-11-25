@@ -1,17 +1,19 @@
 import { C } from '@/constants/colors';
 import type { ReportPrioridad } from '@/types';
 
-/** Rules of the "Nuevo reporte" form, kept apart from the UI so they can be tested alone. */
+/** Reglas del formulario "Nuevo reporte" adaptadas a los servicios del H. Ayuntamiento de Orizaba, Veracruz. */
 export const MAX_DESC = 250;
 export const MIN_DESC = 10;
 export const MAX_PHOTOS = 4;
 
 export const PROBLEMAS: Record<string, string[]> = {
+  Vialidad: ['Bache en la calle', 'Banqueta o guarnición dañada', 'Hundimiento en pavimento'],
+  'Tránsito y vialidad': ['Semáforo descompuesto', 'Señalización dañada', 'Obstrucción vial / vehículo abandonado'],
   'Alumbrado público': ['Lámpara apagada', 'Poste dañado', 'Cableado expuesto'],
-  Vialidad: ['Bache en la calle', 'Semáforo descompuesto', 'Señalización dañada'],
-  Agua: ['Fuga de agua', 'Sin suministro', 'Drenaje tapado'],
-  'Limpieza y residuos': ['Contenedor lleno', 'Basura acumulada'],
-  'Parques y jardines': ['Juego dañado', 'Árbol caído', 'Pasto sin podar'],
+  Agua: ['Fuga de agua', 'Sin suministro', 'Drenaje tapado', 'Alcantarilla sin tapa'],
+  'Limpieza y residuos': ['Contenedor lleno', 'Basura acumulada', 'Camión recolector no pasó'],
+  'Parques y jardines': ['Juego dañado', 'Árbol caído o en riesgo', 'Pasto sin podar'],
+  'Catastro y predial': ['Aclaración de clave catastral', 'Actualización de datos de predio'],
 };
 
 export const PRIORIDADES: { id: ReportPrioridad; hint: string; mark: string }[] = [

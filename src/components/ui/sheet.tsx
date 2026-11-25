@@ -1,7 +1,8 @@
 import { Modal, Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { C, FONT, TOUCH } from '@/constants/colors';
+import { FONT, TOUCH } from '@/constants/colors';
+import { useTheme } from '@/features/theme/theme-context';
 
 import { Icon } from '../icon';
 
@@ -15,9 +16,10 @@ export function SheetModal({
   dismissLabel: string;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onDismiss}>
-      <View style={s.backdrop}>
+      <View style={[s.backdrop, { backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityRole="button" accessibilityLabel={dismissLabel} />
         {children}
       </View>
@@ -36,9 +38,16 @@ export function SheetPanel({
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   return (
-    <View style={[s.panel, { maxHeight }, padBottom && { paddingBottom: insets.bottom + 8 }]} accessibilityViewIsModal>
-      <View style={s.handle} />
+    <View
+      style={[
+        s.panel,
+        { maxHeight, backgroundColor: colors.white, borderTopColor: colors.blue },
+        padBottom && { paddingBottom: insets.bottom + 8 },
+      ]}
+      accessibilityViewIsModal>
+      <View style={[s.handle, { backgroundColor: colors.sheetHandle }]} />
       {children}
     </View>
   );
@@ -56,22 +65,22 @@ export function SheetHeader({
   title: string;
   onClose: () => void;
   closeLabel?: string;
-  /** Shows a back chevron on the left instead of a close button on the right. */
   back?: boolean;
   leading?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  const { colors } = useTheme();
   const btn = (
     <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} onPress={onClose} style={s.btn}>
-      <Icon name={back ? 'chevronLeft' : 'x'} size={back ? 22 : 18} color={C.text1} strokeWidth={2.4} />
+      <Icon name={back ? 'chevronLeft' : 'x'} size={back ? 22 : 18} color={colors.text1} strokeWidth={2.4} />
     </Pressable>
   );
   return (
-    <View style={[s.head, back && { paddingLeft: 6 }]}>
+    <View style={[s.head, { borderBottomColor: colors.border }, back && { paddingLeft: 6 }]}>
       {back ? btn : null}
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text accessibilityRole="header" style={s.title}>
+        <Text accessibilityRole="header" style={[s.title, { color: colors.text1 }]}>
           {title}
         </Text>
         {children}
@@ -82,10 +91,10 @@ export function SheetHeader({
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
-  panel: { backgroundColor: '#fff', borderTopWidth: 4, borderTopColor: C.blue },
-  handle: { alignSelf: 'center', width: 40, height: 4, backgroundColor: C.sheetHandle, marginTop: 10, marginBottom: 4 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 18, paddingRight: 6, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.border },
-  title: { fontFamily: FONT.displayXBold, fontSize: 18, color: C.text1 },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
+  panel: { borderTopWidth: 4 },
+  handle: { alignSelf: 'center', width: 40, height: 4, marginTop: 10, marginBottom: 4 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 18, paddingRight: 6, paddingBottom: 10, borderBottomWidth: 1 },
+  title: { fontFamily: FONT.displayXBold, fontSize: 18 },
   btn: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
 });

@@ -11,13 +11,35 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ReconciliationProvider } from '@/features/reconciliation/reconciliation-context';
 import { ReportsProvider } from '@/features/reports/reports-context';
+import { SplashIntro } from '@/features/shell/splash-intro';
+import { ThemeProvider, useTheme } from '@/features/theme/theme-context';
+import { warmUpServer } from '@/services/api-client';
 
 SplashScreen.preventAutoHideAsync();
+
+function AppShell() {
+  const { dark, colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" options={{ animation: 'fade' }} />
+        <Stack.Screen name="loading" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="new-report" />
+      </Stack>
+      <SplashIntro />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -32,27 +54,28 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    void warmUpServer();
+  }, []);
+
+  useEffect(() => {
     if (loaded || error) SplashScreen.hideAsync();
   }, [loaded, error]);
 
   if (!loaded && !error) return null;
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <ReconciliationProvider>
-          <ReportsProvider>
-            <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#fff' } }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="login" options={{ animation: 'fade' }} />
-              <Stack.Screen name="loading" options={{ animation: 'fade', gestureEnabled: false }} />
-              <Stack.Screen name="(tabs)" options={{ animation: 'fade', gestureEnabled: false }} />
-              <Stack.Screen name="new-report" />
-            </Stack>
-          </ReportsProvider>
-        </ReconciliationProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ReconciliationProvider>
+              <ReportsProvider>
+                <AppShell />
+              </ReportsProvider>
+            </ReconciliationProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

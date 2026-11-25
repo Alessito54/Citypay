@@ -5,7 +5,8 @@ export type IconName =
   | 'money' | 'card' | 'warn' | 'clock' | 'home' | 'chart' | 'doc' | 'user' | 'chat'
   | 'bell' | 'chevronRight' | 'chevronDown' | 'chevronLeft' | 'search' | 'mail' | 'lock'
   | 'eye' | 'eyeOff' | 'globe' | 'calendar' | 'bulb' | 'pin' | 'locate' | 'x' | 'xCircle'
-  | 'camera' | 'image' | 'send' | 'file' | 'settings' | 'check' | 'logout' | 'tool';
+  | 'camera' | 'image' | 'send' | 'file' | 'settings' | 'check' | 'logout' | 'tool'
+  | 'sun' | 'moon' | 'download';
 
 const ICONS: Record<IconName, ReactNode> = {
   money: <><Line x1="12" y1="1" x2="12" y2="23" /><Path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
@@ -41,6 +42,9 @@ const ICONS: Record<IconName, ReactNode> = {
   check: <Polyline points="20 6 9 17 4 12" />,
   tool: <Path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
   logout: <><Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><Polyline points="16 17 21 12 16 7" /><Line x1="21" y1="12" x2="9" y2="12" /></>,
+  sun: <><Circle cx="12" cy="12" r="5" /><Line x1="12" y1="1" x2="12" y2="3" /><Line x1="12" y1="21" x2="12" y2="23" /><Line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><Line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><Line x1="1" y1="12" x2="3" y2="12" /><Line x1="21" y1="12" x2="23" y2="12" /><Line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><Line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>,
+  moon: <Path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
+  download: <><Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><Polyline points="7 10 12 15 17 10" /><Line x1="12" y1="15" x2="12" y2="3" /></>,
 };
 
 interface Props {

@@ -1,14 +1,21 @@
 import { StyleSheet, View } from 'react-native';
 
 import { C, FONT, RADIUS } from '@/constants/colors';
+import { useTheme } from '@/features/theme/theme-context';
 
 import { Icon, type IconName } from '../icon';
 
 /** Bordered row that hosts a TextInput plus a leading icon and optional trailing buttons. */
 export function InputFrame({ icon, error, children }: { icon?: IconName; error?: boolean; children: React.ReactNode }) {
+  const { colors } = useTheme();
   return (
-    <View style={[s.frame, error && s.err]}>
-      {icon ? <Icon name={icon} size={18} color={error ? C.danger : C.blueMid} /> : null}
+    <View
+      style={[
+        s.frame,
+        { backgroundColor: colors.white, borderColor: colors.inputBorder },
+        error && { borderColor: colors.danger, borderWidth: 1.5, backgroundColor: colors.dangerSoft },
+      ]}>
+      {icon ? <Icon name={icon} size={18} color={error ? colors.danger : colors.blueMid} /> : null}
       {children}
     </View>
   );
@@ -30,6 +37,5 @@ export const inputText = {
 export const inputError = { borderColor: C.danger, borderWidth: 1.5, backgroundColor: C.dangerSoft } as const;
 
 const s = StyleSheet.create({
-  frame: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 12, minHeight: 50, borderRadius: RADIUS, backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder },
-  err: inputError,
+  frame: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 12, minHeight: 50, borderRadius: RADIUS, borderWidth: 1 },
 });

@@ -5,6 +5,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Notice, SearchField } from '@/components/ui';
 import { ACCENT_BAR, C, FONT, RADIUS, TOUCH } from '@/constants/colors';
 import { ScreenTop } from '@/features/shell/screen-top';
+import { useTheme } from '@/features/theme/theme-context';
 import type { Status } from '@/types';
 
 import { fmtMoney, SERVICE_LABEL } from './format';
@@ -25,7 +26,8 @@ const isFilter = (v: unknown): v is Filter => FILTERS.some((f) => f.id === v);
 /** Payment list with status filter and free-text search. */
 export function PaymentsScreen() {
   const params = useLocalSearchParams<{ filtro?: string }>();
-  const { transactions, source, loading, open } = useReconciliation();
+  const { dark, colors } = useTheme();
+  const { transactions, source, sourceReason, loading, open } = useReconciliation();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>(isFilter(params.filtro) ? params.filtro : 'todos');
 
@@ -57,7 +59,7 @@ export function PaymentsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenTop />
       <FlatList
         data={list}
@@ -68,12 +70,17 @@ export function PaymentsScreen() {
         ListHeaderComponent={
           <View style={{ padding: 18, paddingBottom: 10, gap: 12 }}>
             <View>
-              <Text accessibilityRole="header" style={s.h1}>
+              <Text accessibilityRole="header" style={[s.h1, { color: colors.text1 }]}>
                 Pagos
               </Text>
-              <Text style={s.sub}>Toca un pago para ver su detalle o conciliarlo.</Text>
+              <Text style={[s.sub, { color: colors.text2 }]}>Toca un pago para ver su detalle o conciliarlo.</Text>
             </View>
-            {source === 'demo' ? <Notice tone="warning" text="Sin conexión con el servidor: se muestran pagos de demostración." /> : null}
+            {source === 'demo' ? (
+              <Notice
+                tone={sourceReason?.startsWith('Vista previa') ? 'info' : 'warning'}
+                text={sourceReason || 'Conectando con el servidor: se muestran pagos de demostración mientras reconecta.'}
+              />
+            ) : null}
             <SearchField
               value={q}
               onChangeText={setQ}
@@ -84,6 +91,7 @@ export function PaymentsScreen() {
             <View style={s.chips} accessibilityRole="tablist">
               {FILTERS.map((f) => {
                 const on = filter === f.id;
+                const activeFg = dark ? '#0B1220' : '#FFFFFF';
                 return (
                   <Pressable
                     key={f.id}
@@ -91,23 +99,34 @@ export function PaymentsScreen() {
                     accessibilityLabel={`${f.label}, ${counts[f.id]}`}
                     accessibilityState={{ selected: on }}
                     onPress={() => setFilter(f.id)}
-                    style={[s.chip, on && s.chipOn]}>
-                    <Text style={[s.chipText, on && { color: '#fff' }]}>{f.label}</Text>
-                    <View style={[s.count, on && { backgroundColor: 'rgba(255,255,255,0.22)' }]}>
-                      <Text style={[s.countText, on && { color: '#fff' }]}>{counts[f.id]}</Text>
+                    style={[
+                      s.chip,
+                      {
+                        backgroundColor: on ? colors.blue : colors.white,
+                        borderColor: on ? colors.blue : colors.inputBorder,
+                        borderBottomColor: on ? (dark ? colors.blueMid : colors.navy) : colors.inputBorder,
+                      },
+                    ]}>
+                    <Text style={[s.chipText, { color: on ? activeFg : colors.blue }]}>{f.label}</Text>
+                    <View
+                      style={[
+                        s.count,
+                        { backgroundColor: on ? (dark ? 'rgba(11,18,32,0.22)' : 'rgba(255,255,255,0.22)') : colors.blueSoft },
+                      ]}>
+                      <Text style={[s.countText, { color: on ? activeFg : colors.blue }]}>{counts[f.id]}</Text>
                     </View>
                   </Pressable>
                 );
               })}
             </View>
             <View style={s.resultRow}>
-              <Text style={s.result} accessibilityLiveRegion="polite">
+              <Text style={[s.result, { color: colors.text2 }]} accessibilityLiveRegion="polite">
                 {loading ? 'Cargando pagos…' : `${list.length} ${list.length === 1 ? 'pago' : 'pagos'} · ${fmtMoney(total)}`}
                 {filter !== 'todos' ? ` · ${STATUS_CFG[filter].label}` : ''}
               </Text>
               {hasFilters ? (
                 <Pressable accessibilityRole="button" onPress={clearAll} style={s.clearAll}>
-                  <Text style={s.clearAllText}>Limpiar filtros</Text>
+                  <Text style={[s.clearAllText, { color: colors.blue }]}>Limpiar filtros</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -124,7 +143,13 @@ export function PaymentsScreen() {
           )
         }
         renderItem={({ item, index }) => (
-          <View style={[s.itemWrap, index === 0 && s.first, index === list.length - 1 && s.last]}>
+          <View
+            style={[
+              s.itemWrap,
+              { backgroundColor: colors.white, borderColor: colors.border },
+              index === 0 && s.first,
+              index === list.length - 1 && s.last,
+            ]}>
             <TransactionRow tx={item} last={index === list.length - 1} onPress={() => open(item)} />
           </View>
         )}

@@ -94,14 +94,33 @@ export const geocoding = {
     }
   },
 
-  /** Address text → best match in Mexico, or null when nothing is found. */
+  /** Address text → best match in Mexico (prioritizing Orizaba, Veracruz), or null when nothing is found. */
   async search(query: string, near?: Coords | null): Promise<GeocodeResult | null> {
-    const params: Record<string, string> = { q: query, limit: '1', countrycodes: 'mx', addressdetails: '1' };
-    if (near) {
-      // Prefer results around the current pin (about ±0.3°, roughly a metropolitan area).
-      const d = 0.3;
-      params.viewbox = [near.longitude - d, near.latitude + d, near.longitude + d, near.latitude - d].join(',');
+    const center = near ?? { latitude: 18.8505, longitude: -97.1036 };
+    const d = near ? 0.25 : 0.18;
+    const viewbox = [center.longitude - d, center.latitude + d, center.longitude + d, center.latitude - d].join(',');
+    const hasMunicipality = /orizaba|veracruz/i.test(query);
+
+    // 1. Intenta primero acotado al valle de Orizaba para calles locales ("Oriente 6", "Sur 10", "Colón Poniente")
+    if (!near && !hasMunicipality) {
+      const [localPlace] = await request<NominatimPlace[]>('/search', {
+        q: `${query}, Orizaba, Veracruz`,
+        limit: '1',
+        countrycodes: 'mx',
+        addressdetails: '1',
+      });
+      if (localPlace) {
+        return { latitude: Number(localPlace.lat), longitude: Number(localPlace.lon), label: formatAddress(localPlace) };
+      }
     }
+
+    const params: Record<string, string> = {
+      q: query,
+      limit: '1',
+      countrycodes: 'mx',
+      addressdetails: '1',
+      viewbox,
+    };
     const [place] = await request<NominatimPlace[]>('/search', params);
     if (!place) return null;
     return { latitude: Number(place.lat), longitude: Number(place.lon), label: formatAddress(place) };
